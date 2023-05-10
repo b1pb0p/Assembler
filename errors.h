@@ -6,20 +6,21 @@
 #ifndef ASSEMBLER_ERRORS_H
 #define ASSEMBLER_ERRORS_H
 
-#define MSG_LEN 30
+#define MSG_LEN 34
 extern const char *MSG[MSG_LEN];
 
 typedef enum {
     NO_ERROR,
     FAILURE,
-    PRE_DONE,
+    ERR_MEM_ALLOC,
     FIRST_PASS_DONE,
     SECOND_PASS_DONE,
-    ERR_MEM_ALLOC,
+    PRE_DONE,
+    ERR_FIRST_PASS_DONE,
+    ERR_SECOND_PASS_DONE,
+    ERR_PRE_DONE,
     ERR_OPEN_FILE,
-    OPEN_FILE_OK,
-    PRE_FILE_OK,
-    ERR_PRE_FILE,
+    OPEN_FILE,
     ERR_INVAL_OPCODE,
     ERR_INVAL_OPERAND,
     ERR_MISS_OPERAND,
@@ -36,10 +37,16 @@ typedef enum {
     ERR_LINE_TOO_LONG,
     ERR_INVAL_MACRO_NAME,
     ERR_DUP_MACRO,
-    ERR_MISSING_ENDMACRO
+    ERR_MISSING_ENDMACRO,
+    ERR_PRE,
+    PRE_FILE_OK,
+    FIRST_PASS_OK,
+    SECOND_PASS_OK,
+    ERR_FIRST_PASS,
+    ERR_SECOND_PASS
 } status;
 
-void handle_error(int code, ...);
-void handle_progress(int code, ...);
+void handle_error(status code, ...);
+void handle_progress(status code, ...);
 
 #endif

@@ -55,7 +55,7 @@ file_context* create_file_context(const char* file_name, char* ext, char* mode, 
  * @return Length of the word.
  */
 size_t get_word(char **ptr) {
-    char *start = *ptr;
+    char *start;
     size_t length = 0;
 
     // Skip leading white spaces

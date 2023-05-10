@@ -11,14 +11,15 @@
 const char *MSG[MSG_LEN] = {
         "Assembly completed without errors. Output files generated.",
         "Assembly terminated with errors. No output files generated.",
-        "Preprocessor - The preprocessing stage is finished.",
-        "First Pass - The first pass stage is finished.",
-        "Second Pass - The second pass stage is finished.",
         "Assembler - Memory allocation error.",
+        "First Pass - The first pass stage is finished without errors.",
+        "Second Pass - The second pass stage is finished without errors.",
+        "Preprocessor - The preprocessing stage is finished without errors.",
+        "First Pass - The first pass stage is finished with errors.",
+        "Second Pass - The second pass stage is finished with errors.",
+        "Preprocessor - The preprocessing stage is finished with errors.",
         "Assembler - Unable to open file - %s",
         "Assembler - File opened successfully - %s.",
-        "Preprocessor - Output file successfully generated - %s.",
-        "Preprocessor - No output file generated - %s.",
         "%s - Invalid opcode on line %d.",
         "%s - Invalid operand on line %d.",
         "%s - Missing operand on line %d.",
@@ -36,39 +37,49 @@ const char *MSG[MSG_LEN] = {
         "%s - Invalid macro name on line %d.",
         "%s - Duplicate macro name on line %d.",
         "%s - Missing 'endmcro' on line %d.",
-
+        "Preprocessor (%d/%d) - No output file generated - %s.",
+        "Preprocessor (%d/%d) - Output file successfully generated - %s.",
+        "First Pass (%d/%d) - Output file successfully generated - %s.",
+        "Second Pass (%d/%d) - Output file successfully generated - %s.",
+        "First Pass (%d/%d) - No output file generated - %s.",
+        "Second Pass (%d/%d) - No output file generated - %s."
 };
 
 
-void handle_error(int code, ...) {
+void handle_error(status code, ...) {
     va_list args;
     if (code == NO_ERROR) {
         printf("TERMINATED ->\t");
         printf("%s\n", MSG[code]);
     }
+    else if (code <= ERR_PRE_DONE) {
+        fprintf(stderr, "ERROR ->\t");
+        fprintf(stderr, "%s",MSG[code]);
+    }
     else {
         fprintf(stderr, "ERROR ->\t");
         file_context* fc;
+        int num, tot;
         // Error messages that require additional arguments
         va_start(args, code);
         fc = va_arg(args, file_context*);
-        if (code == ERR_OPEN_FILE) {
+        if (!fc)
+            fprintf(stderr, "%s", MSG[FAILURE]);
+        else if (code >= ERR_OPEN_FILE && code <= OPEN_FILE)
             fprintf(stderr, MSG[code], fc->file_name);
-        }
-        else if (code >= ERR_MEM_ALLOC) {
-            fprintf(stderr, "%s", MSG[code]);
-        }
+        else if (code >= ERR_INVAL_OPCODE && code <= ERR_MISSING_ENDMACRO)
+            fprintf(stderr, MSG[code],fc->file_name, fc->lc);
         else {
-            char* error_file = fc->file_name;
-            int error_line = va_arg(args, int);
-            fprintf(stderr, MSG[code], error_file, error_line);
+            num = va_arg(args, int);
+            tot = va_arg(args, int);
+            fprintf(stderr, MSG[code], num, tot, fc->file_name);
         }
         va_end(args);
     }
     fprintf(stderr, "\n");
 }
 
-void handle_progress(int code, ...) {
+void handle_progress(status code, ...) {
     va_list args;
     file_context* fc;
     printf("PROGRESS ->\t");
