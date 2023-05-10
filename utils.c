@@ -10,7 +10,7 @@
 #include "utils.h"
 
 
-file_context* create_file_context(char* file_name, char* ext, char* mode, int* report) {
+file_context* create_file_context(const char* file_name, char* ext, char* mode, int* report) {
     file_context* fc;
     FILE* file = NULL;
     char* file_name_w_ext;

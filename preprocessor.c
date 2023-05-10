@@ -2,9 +2,16 @@
  * preprocessor functions.
  * @author Bar Toplian - 323869065- bar.toplian@gmail.com
  */
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#include "ctype.h"
 #include "preprocessor.h"
 #include "utils.h"
 #include "errors.h"
+
+macro_s *macros;
+int num_macros = 0;
 
 status assembler_preprocessor(file_context *src, file_context *dest) {
     char line[MAX_BUFFER_LENGTH];
@@ -26,13 +33,13 @@ status assembler_preprocessor(file_context *src, file_context *dest) {
             handle_error(ERR_LINE_TOO_LONG, src);
         }
         report = handle_macro_start(src, line, &found_macro, macro_name, macro_body);
-        HANDEL_REPORT
-                report = handle_macro_body(src, line, macro_body);
-        HANDEL_REPORT
-                report = handle_macro_end(src, line, &found_macro, macro_name, macro_body);
-        HANDEL_REPORT
-                report = write_to_file(dest, line, found_macro, report);
-        HANDEL_REPORT
+        HANDLE_REPORT
+        report = handle_macro_body(src, line, macro_body);
+        HANDLE_REPORT
+        report = handle_macro_end(src, line, &found_macro, macro_name, macro_body);
+        HANDLE_REPORT
+        report = write_to_file(dest, line, found_macro, report);
+        HANDLE_REPORT
     }
     /* Reset line counter and rewind files */
     src->lc = 0;
@@ -206,8 +213,8 @@ status add_macro(char* name, char* body) {
     if (!temp_macro)
         return ERR_MEM_ALLOC;
     macros = temp_macro;
-    s_name = copy_string(macros[num_macros].name, name);
-    s_body = copy_string(macros[num_macros].body, body);
+    s_name = copy_string(&macros[num_macros].name, name);
+    s_body = copy_string(&macros[num_macros].body, body);
     if (s_name != NO_ERROR|| s_body != NO_ERROR)
         return ERR_MEM_ALLOC;
     num_macros++;

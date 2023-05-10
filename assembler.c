@@ -1,7 +1,6 @@
 /* Assembler Project in 20465 - System Programming Laboratory
  * @author Bar Toplian - 323869065- bar.toplian@gmail.com
  */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include "errors.h"
@@ -24,9 +23,8 @@ int main(int argc, char *argv[]) {
         exit(FAILURE);
     }
 
-    for (i = 1; i < argc; i++) {
+    for (i = 1; i < argc; i++)
         process_file(argv[i]);
-    }
 
     handle_error(NO_ERROR);
     atexit(free_macros);
@@ -34,11 +32,12 @@ int main(int argc, char *argv[]) {
 }
 
 void process_file(const char* file_name) {
+    file_context *fc, *dest;
     status code = NO_ERROR;
-    file_context *fc = create_file_context(file_name, ASSEMBLY_EXT, FILE_MODE_READ, &code);
+    fc = create_file_context(file_name, ASSEMBLY_EXT, FILE_MODE_READ, &code);
     HANDLE_STATUS(fc);
 
-    file_context* dest = create_file_context(file_name, PREPROCESSOR_EXT, FILE_MODE_WRITE, &code);
+    dest = create_file_context(file_name, PREPROCESSOR_EXT, FILE_MODE_WRITE, &code);
     HANDLE_STATUS(dest);
 
     code = assembler_preprocessor(fc, dest);

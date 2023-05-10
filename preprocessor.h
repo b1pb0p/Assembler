@@ -9,9 +9,7 @@
 #include "utils.h"
 #include "errors.h"
 
-#define MAX_LINE_LENGTH 82 /* 80 + '\0' */
-#define MAX_MACRO_NAME_LENGTH 31 /* 30 + '\0' */
-#define MAX_LABEL_LENGTH 32 /*  31 + '\0' */
+#define MAX_MACRO_LENGTH 31 /* 30 + '\0' */
 #define DEFAULT_MACROS 2
 #define MACRO_START "mcro"
 #define MACRO_END "endmcro"
@@ -19,6 +17,7 @@
 #define SKIP_MCR0_END 7 /* endmcro length */
 #define MAX_BUFFER_LENGTH 256
 
+#define HANDLE_REPORT if(report == ERR_MEM_ALLOC) return ERR_MEM_ALLOC;
 
 typedef struct {
     char* name;

@@ -8,6 +8,8 @@
 #include "errors.h"
 
 #define FILENAME_EXT_LEN 3 /* .as */
+#define MAX_LINE_LENGTH 82 /* 80 + '\0' */
+#define MAX_LABEL_LENGTH 32 /*  31 + '\0' */
 
 typedef struct {
     FILE* file_ptr;
@@ -20,7 +22,7 @@ typedef struct {
 
 
 
-file_context* create_file_context(char* file_name, char* ext, char* mode, int* report);
+file_context* create_file_context(const char* file_name, char* ext, char* mode, int* report);
 size_t get_word(char **ptr);
 status copy_string(char** target, const char* source);
 status copy_n_string(char** target, const char* source, size_t count);

@@ -4,7 +4,7 @@
 #define FILE_MODE_READ "r"
 #define FILE_MODE_WRITE "w"
 #define ASSEMBLY_EXT ".as"
-#define AUTOMAKE_EXT  ".am"
+#define PREPROCESSOR_EXT  ".am"
 #define OBJECT_EXT  ".ob"
 #define ENTRY_EXT  ".ent"
 #define EXTERNAL_EXT ".ext"
