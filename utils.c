@@ -10,7 +10,7 @@
 #include "utils.h"
 
 
-file_context* create_file_context(const char* file_name, char* ext, char* mode, int* report) {
+file_context* create_file_context(const char* file_name, char* ext, char* mode, status * report) {
     file_context* fc;
     FILE* file = NULL;
     char* file_name_w_ext;
@@ -33,12 +33,13 @@ file_context* create_file_context(const char* file_name, char* ext, char* mode, 
     free(file_name_w_ext);
     fc->file_ptr = NULL;
     file = fopen(fc->file_name, mode);
+
     if (!file) {
+        handle_error(ERR_OPEN_FILE, fc);
         *report = ERR_OPEN_FILE;
-        free(fc->file_name);
-        free(fc);
         return NULL;
     }
+
     fc->file_ptr = file;
     fc->ic = 0;
     fc->dc = 0;
@@ -115,4 +116,22 @@ status copy_n_string(char** target, const char* source, size_t count) {
     temp[count] = '\0';  // Ensure null-termination
     *target = temp;
     return NO_ERROR;
+}
+
+/**
+ * Frees the memory occupied by a file_context structure.
+ * Closes the file pointer if it's open and frees the dynamically allocated file name.
+ *
+ * @param context The file_context structure to be freed.
+ */
+void free_file_context(file_context* context) {
+    if (context != NULL) {
+        if (context->file_ptr != NULL)
+            fclose(context->file_ptr);
+
+        if (context->file_name != NULL)
+            free(context->file_name);
+
+        free(context);
+    }
 }

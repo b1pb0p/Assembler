@@ -65,9 +65,9 @@ void handle_error(status code, ...) {
         fc = va_arg(args, file_context*);
         if (!fc)
             fprintf(stderr, "%s", MSG[FAILURE]);
-        else if (code >= ERR_OPEN_FILE && code <= OPEN_FILE)
+        else if (code < OPEN_FILE)
             fprintf(stderr, MSG[code], fc->file_name);
-        else if (code >= ERR_INVAL_OPCODE && code <= ERR_MISSING_ENDMACRO)
+        else if (code <= ERR_MISSING_ENDMACRO)
             fprintf(stderr, MSG[code],fc->file_name, fc->lc);
         else {
             num = va_arg(args, int);
@@ -81,16 +81,27 @@ void handle_error(status code, ...) {
 
 void handle_progress(status code, ...) {
     va_list args;
-    file_context* fc;
-    printf("PROGRESS ->\t");
+    file_context *fc;
+    int num, tot;
 
-    va_start(args, code);
-    fc = va_arg(args, file_context*);
-    if (!fc) handle_error(FAILURE);
-    else if (code <= PRE_FILE_OK)
-        printf(MSG[code], fc->file_name);
-    else
-        printf(MSG[code], fc->file_name, fc->lc);
-    va_end(args);
+    if (code <= PRE_DONE) {
+        printf("PROGRESS ->\t");
+        printf("%s", MSG[code]);
+    }
+    else {
+        // Error messages that require additional arguments
+        va_start(args, code);
+        fc = va_arg(args, file_context*);
+        if (!fc)
+            printf("%s", MSG[FAILURE]);
+        else if (code <= OPEN_FILE)
+            printf(MSG[code], fc->file_name);
+        else {
+            num = va_arg(args, int);
+            tot = va_arg(args, int);
+            printf( MSG[code], num, tot, fc->file_name);
+        }
+        va_end(args);
+    }
     printf("\n");
 }

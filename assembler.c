@@ -8,6 +8,11 @@
 #include "preprocessor.h"
 #include "assembler.h"
 
+#define HANDLE_STATUS(file) if (code != NO_ERROR) { \
+    handle_error(code, (file));                      \
+    evaluate_and_proceed(&code, (file)); \
+}
+
 /*
  *
 status assembler_first_pass(file_context* file_c);
@@ -35,28 +40,29 @@ void process_file(const char* file_name) {
     file_context *fc, *dest;
     status code = NO_ERROR;
     fc = create_file_context(file_name, ASSEMBLY_EXT, FILE_MODE_READ, &code);
-    HANDLE_STATUS(fc);
+    HANDLE_STATUS(fc)
 
     dest = create_file_context(file_name, PREPROCESSOR_EXT, FILE_MODE_WRITE, &code);
-    HANDLE_STATUS(dest);
+    HANDLE_STATUS(dest)
 
     code = assembler_preprocessor(fc, dest);
     if (code != NO_ERROR) {
         handle_error(code, dest);
         handle_error(ERR_PRE, dest);
         if (dest) remove(dest->file_name);
-        evaluate_and_proceed(code, dest);
+        evaluate_and_proceed(&code, dest);
     }
+    else
+        handle_progress(OPEN_FILE, fc->file_name);
 
 }
 
-void evaluate_and_proceed(int code, file_context* src) {
-    if (code <= ERR_PRE) {
+void evaluate_and_proceed(status* code, file_context* src) {
+    if (*code <= ERR_PRE) {
         /* Error Status that require to exit program */
         if (src) free_file_context(src);
-        exit(code);
-    } else {
-        code = NO_ERROR;
-    }
+        exit(*code);
+    } else
+        *code = NO_ERROR;
 }
 

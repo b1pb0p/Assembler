@@ -9,12 +9,6 @@
 #define ENTRY_EXT  ".ent"
 #define EXTERNAL_EXT ".ext"
 
-
-#define HANDLE_STATUS(file) if (code != NO_ERROR) { \
-    handle_error(code, (file));                      \
-    evaluate_and_proceed(code, (file)); \
-}
-
-void evaluate_and_proceed(int code, file_context* src);
+void evaluate_and_proceed(status* code, file_context* src);
 void process_file(const char* file_name);
 #endif
