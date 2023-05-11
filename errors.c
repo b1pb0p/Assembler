@@ -60,7 +60,7 @@ void handle_error(status code, ...) {
         fprintf(stderr, "ERROR ->\t");
         file_context* fc;
         int num, tot;
-        // Error messages that require additional arguments
+        /* Error messages that require additional arguments */
         va_start(args, code);
         fc = va_arg(args, file_context*);
         if (!fc)
@@ -89,7 +89,7 @@ void handle_progress(status code, ...) {
         printf("%s", MSG[code]);
     }
     else {
-        // Error messages that require additional arguments
+        /* Error messages that require additional arguments */
         va_start(args, code);
         fc = va_arg(args, file_context*);
         if (!fc)

@@ -17,7 +17,7 @@ status assembler_preprocessor(file_context *src, file_context *dest) {
     char line[MAX_BUFFER_LENGTH];
     char *macro_name, *macro_body;
     unsigned int line_len;
-    int found_macro = 0, ch, error_flag = 0;
+    int found_macro = 0, error_flag = 0;
     status report;
     macro_name = macro_body = NULL;
 

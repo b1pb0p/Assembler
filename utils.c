@@ -59,15 +59,12 @@ size_t get_word(char **ptr) {
     char *start;
     size_t length = 0;
 
-    // Skip leading white spaces
     while (**ptr && isspace((int)**ptr)) {
         (*ptr)++;
     }
 
-    // Store the starting position of the word
     start = *ptr;
 
-    // Find the length of the word
     while (**ptr && !isspace((int)**ptr)) {
         (*ptr)++;
         length++;
