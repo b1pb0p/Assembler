@@ -62,9 +62,7 @@ size_t get_word(char **ptr) {
     while (**ptr && isspace((int)**ptr)) {
         (*ptr)++;
     }
-
     start = *ptr;
-
     while (**ptr && !isspace((int)**ptr)) {
         (*ptr)++;
         length++;
@@ -110,7 +108,7 @@ status copy_n_string(char** target, const char* source, size_t count) {
         return ERR_MEM_ALLOC;
     }
     strncpy(temp, source, count);
-    temp[count] = '\0';  // Ensure null-termination
+    temp[count] = '\0';
     *target = temp;
     return NO_ERROR;
 }
