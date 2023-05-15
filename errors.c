@@ -48,6 +48,8 @@ const char *MSG[MSG_LEN] = {
 
 void handle_error(status code, ...) {
     va_list args;
+    file_context* fc;
+    int num, tot;
     if (code == NO_ERROR) {
         printf("TERMINATED ->\t");
         printf("%s\n", MSG[code]);
@@ -58,8 +60,6 @@ void handle_error(status code, ...) {
     }
     else {
         fprintf(stderr, "ERROR ->\t");
-        file_context* fc;
-        int num, tot;
         /* Error messages that require additional arguments */
         va_start(args, code);
         fc = va_arg(args, file_context*);

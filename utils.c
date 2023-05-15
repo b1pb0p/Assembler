@@ -10,11 +10,12 @@
 #include "utils.h"
 
 
-file_context* create_file_context(const char* file_name, char* ext, char* mode, status * report) {
+file_context* create_file_context(const char* file_name, char* ext, char* mode, status *report) {
     file_context* fc;
     FILE* file = NULL;
     char* file_name_w_ext;
     size_t len;
+
     fc = malloc(sizeof(file_context));
     if (!fc) {
         *report = ERR_MEM_ALLOC;
@@ -44,7 +45,7 @@ file_context* create_file_context(const char* file_name, char* ext, char* mode, 
     fc->ic = 0;
     fc->dc = 0;
     fc->lc = 0;
-    *report = 0;
+    *report = NO_ERROR;
     return fc;
 }
 
