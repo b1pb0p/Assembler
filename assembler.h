@@ -9,6 +9,6 @@
 #define ENTRY_EXT  ".ent"
 #define EXTERNAL_EXT ".ext"
 
+status process_file(const char* file_name, int index, int max);
 void evaluate_and_proceed(status* code, file_context* src);
-void process_file(const char* file_name);
 #endif

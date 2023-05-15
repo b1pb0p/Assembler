@@ -22,6 +22,7 @@ FILE **assembler_generate_output();
 
 int main(int argc, char *argv[]) {
     int i;
+    status report;
 
     if (argc == 1) {
         handle_error(FAILURE);
@@ -29,14 +30,15 @@ int main(int argc, char *argv[]) {
     }
 
     for (i = 1; i < argc; i++)
-        process_file(argv[i]);
+      report = process_file(argv[i], i, argc - 1);
+    if (report != NO_ERROR) handle_error(ERR_PRE_DONE);
 
     handle_error(NO_ERROR);
     atexit(free_macros);
     return 0;
 }
 
-void process_file(const char* file_name) {
+status process_file(const char* file_name, int index, int max) {
     file_context *fc, *dest;
     status code = NO_ERROR;
     fc = create_file_context(file_name, ASSEMBLY_EXT, FILE_MODE_READ, &code);
@@ -48,13 +50,14 @@ void process_file(const char* file_name) {
     code = assembler_preprocessor(fc, dest);
     if (code != NO_ERROR) {
         handle_error(code, dest);
-        handle_error(ERR_PRE, dest);
+        handle_error(ERR_PRE, dest, index, max);
         if (dest) remove(dest->file_name);
         evaluate_and_proceed(&code, dest);
+        return FAILURE;
+    } else {
+        handle_progress(PRE_FILE_OK, dest, index, max);
+        return NO_ERROR;
     }
-    else
-        handle_progress(OPEN_FILE, fc->file_name);
-
 }
 
 void evaluate_and_proceed(status* code, file_context* src) {
