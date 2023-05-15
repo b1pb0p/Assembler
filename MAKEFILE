@@ -4,7 +4,7 @@ Assembler: assembler.o preprocessor.o utils.o errors.o
 assembler.o: assembler.c assembler.h preprocessor.h utils.h errors.h
 	gcc -ansi -pedantic -Wall -c assembler.c
 
-preprocessor.o: preprocessor.c preprocessor.h utils.h
+preprocessor.o: preprocessor.c preprocessor.h utils.h errors.h
 	gcc -ansi -pedantic -Wall -c preprocessor.c
 
 utils.o: utils.c utils.h errors.h
@@ -12,3 +12,8 @@ utils.o: utils.c utils.h errors.h
 
 errors.o: errors.c utils.h errors.h
 	gcc -ansi -pedantic -Wall -c errors.c
+
+.PHONY: clean
+
+clean:
+	rm -f *.o
