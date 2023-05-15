@@ -5,13 +5,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include "ctype.h"
+#include <ctype.h>
 #include "preprocessor.h"
 #include "utils.h"
 #include "errors.h"
 
-macro_s *macros;
-int num_macros = 0;
+macro_s *macros;  /* Global array of macros */
+int num_macros = 0; /* Number of macros in the array */
+
+#define count_spaces(line_offset,line) while ((line)[line_offset] != '\0' && isspace((line)[line_offset])) \
+(line_offset)++;
 
 status assembler_preprocessor(file_context *src, file_context *dest) {
     char line[MAX_BUFFER_LENGTH];
@@ -32,13 +35,13 @@ status assembler_preprocessor(file_context *src, file_context *dest) {
             error_flag = 1;
             handle_error(ERR_LINE_TOO_LONG, src);
         }
-        report = handle_macro_start(src, line, &found_macro, macro_name, macro_body);
+        report = handle_macro_start(src, line, &found_macro, &macro_name, &macro_body);
         HANDLE_REPORT
-        report = handle_macro_body(src, line, macro_body);
+        report = handle_macro_body(src, line, found_macro, &macro_body);
         HANDLE_REPORT
-        report = handle_macro_end(src, line, &found_macro, macro_name, macro_body);
+        report = handle_macro_end(src, line, &found_macro, &macro_name, &macro_body);
         HANDLE_REPORT
-        report = write_to_file(dest, line, found_macro, report);
+        report = write_to_file(src, dest, line, found_macro, report);
         HANDLE_REPORT
     }
     /* Reset line counter and rewind files */
@@ -46,11 +49,12 @@ status assembler_preprocessor(file_context *src, file_context *dest) {
     dest->lc = 0;
     rewind(src->file_ptr);
     rewind(dest->file_ptr);
+    free_unused_macros();
     return error_flag ? FAILURE : NO_ERROR;
 }
 
-status handle_macro_start(file_context * src, char *line, int *found_macro,
-                          char *macro_name, char *macro_body) {
+status handle_macro_start(file_context *src, char *line, int *found_macro,
+                          char **macro_name, char **macro_body) {
     char *ptr;
     size_t word_len;
     int i;
@@ -58,137 +62,196 @@ status handle_macro_start(file_context * src, char *line, int *found_macro,
     if (!*found_macro && (ptr = strstr(line, MACRO_START)) != NULL) {
         *found_macro = 1;
         ptr += SKIP_MCRO;
+        while (*ptr && (*ptr == ' ' || *ptr == '\t')) {
+            ptr++;
+        }
         word_len = get_word(&ptr);
 
         if (word_len >= MAX_MACRO_LENGTH) {
-            handle_error(ERR_INVAL_MACRO_NAME, src->lc);
+            handle_error(ERR_INVAL_MACRO_NAME, src);
             *found_macro = 0;
             return ERR_INVAL_MACRO_NAME;
         }
 
         for (i = 0; i < num_macros; i++) {
             if (strncmp(ptr, macros[i].name, strlen(macros[i].name)) == 0) {
-                handle_error(ERR_DUP_MACRO, src->lc);
+                handle_error(ERR_DUP_MACRO, src);
                 *found_macro = 0;
                 return ERR_DUP_MACRO;
             }
         }
-        copy_n_string(&macro_name, ptr, word_len);
-        if (macro_body != NULL) {
-            handle_error(ERR_MISSING_ENDMACRO, src->lc);
-            *found_macro = 0;
-            free(macro_body);
-            macro_body = NULL;
+
+        if (*macro_name != NULL) {
+            free(*macro_name);
+            *macro_name = NULL;
         }
+        copy_n_string(macro_name, ptr, word_len);
+        if (*macro_body != NULL) {
+            handle_error(ERR_MISSING_ENDMACRO, src);
+            *found_macro = 0;
+            free(*macro_body);
+            *macro_body = NULL;
+        }
+
     }
-    free_unused_macros();
     return NO_ERROR;
 }
 
-status handle_macro_body(file_context * src, char *line, char *macro_body) {
+
+status handle_macro_body(file_context *src, char *line, int found_macro, char **macro_body) {
+    static int macro_start = 0;
     int line_offset;
     char *new_macro_body = NULL;
     unsigned int body_len, line_length;
-    if (macro_body != NULL) {
-        /* Adding to the body of a macro*/
-        body_len = strlen(macro_body);
+    size_t word;
+
+    if (!found_macro)
+        return NO_ERROR;
+    if (*macro_body != NULL) {
+        macro_start = 0;
+        /* Adding to the body of a macro */
+        body_len = strlen(*macro_body);
         line_offset = 0;
         line_length = strlen(line);
+        count_spaces(line_offset, line);
 
-        while (line[line_offset] != '\0' && isspace(line[line_offset])) {
-            line_offset++;
-        }
+        if (strncmp(line + line_offset, "endmcro", SKIP_MCR0_END) == 0)
+            return NO_ERROR;
 
-        new_macro_body =
-                (char *)realloc(macro_body, body_len + line_length - line_offset + 1);
+        new_macro_body = realloc(*macro_body, body_len + line_length - line_offset + 2);
         if (new_macro_body == NULL) {
-            handle_error(ERR_MEM_ALLOC, src->lc);
+            handle_error(ERR_MEM_ALLOC, src);
             return ERR_MEM_ALLOC;
         }
 
-        macro_body = new_macro_body;
-        strncat(macro_body, line + line_offset, line_length - line_offset);
+        *macro_body = new_macro_body;
+        strncat(*macro_body, line + line_offset, line_length - line_offset);
+        strcat(*macro_body, "\n");
     } else {
         /* The beginning of a new macro's body */
         line_offset = 0;
         line_length = strlen(line);
 
-        while (line[line_offset] != '\0' && isspace(line[line_offset])) {
-            line_offset++;
+        count_spaces(line_offset, line);
+        if (macro_start == 0) {
+            macro_start = 1;
+            line += line_offset +  SKIP_MCRO;
+            word = get_word(&line);
+            if (line[word] != '\0') {
+                handle_error(ERR_EXTRA_TEXT, src);
+                return ERR_EXTRA_TEXT;
+            }
+            else
+                return NO_ERROR;
         }
 
-        macro_body = (char *)malloc(line_length - line_offset + 1);
-        if (macro_body == NULL) {
-            handle_error(ERR_MEM_ALLOC, src->lc);
+
+        *macro_body = (char *)malloc(line_length - line_offset + 2);
+        if (*macro_body == NULL) {
+            handle_error(ERR_MEM_ALLOC, src);
             return ERR_MEM_ALLOC;
         }
 
-        strncpy(macro_body, line + line_offset, line_length - line_offset);
-        macro_body[line_length - line_offset] = '\0';
+        strncpy(*macro_body, line + line_offset, line_length - line_offset);
+        (*macro_body)[line_length - line_offset] = '\0';
+        strcat(*macro_body, "\n");
     }
     return NO_ERROR;
 }
 
-status handle_macro_end(file_context * src, char *line, int *found_macro,
-                        char *macro_name, char *macro_body) {
+
+status handle_macro_end(file_context *src, char *line, int *found_macro,
+                        char **macro_name, char **macro_body) {
     char *ptr;
     status add_macro_status;
+
     if (*found_macro && (ptr = strstr(line, MACRO_END)) != NULL) {
         *found_macro = 0;
         ptr += SKIP_MCR0_END;
+
         while (*ptr && isspace(*ptr)) {
             ptr++;
         }
         if (*ptr) {
-            handle_error(ERR_EXTRA_TEXT, src->lc);
-        } else {
-            add_macro_status = add_macro(macro_name, macro_body);
+            handle_error(ERR_EXTRA_TEXT, src);
+            return FAILURE;
+        }
+        else {
+            add_macro_status = add_macro(*macro_name, *macro_body);
             if (add_macro_status == ERR_MEM_ALLOC) {
-                handle_error(ERR_MEM_ALLOC, src->lc);
+                handle_error(ERR_MEM_ALLOC, src);
                 return FAILURE;
             }
-            free(macro_name);
-            free(macro_body);
-            macro_name = NULL;
-            macro_body = NULL;
+            free(*macro_name);
+            free(*macro_body);
+            *macro_name = NULL;
+            *macro_body = NULL;
         }
     }
     return NO_ERROR;
 }
 
-status write_to_file(file_context *dest, char *line, int found_macro, status report) {
+status write_to_file(file_context *src, file_context *dest, char *line, int found_macro, status report) {
     int line_offset, i;
     char *ptr, *word = NULL;
     size_t word_len;
+
     if (report != NO_ERROR)
         return FAILURE;
-    if (!found_macro) {
-        line_offset = 0;
-        while (isspace(line[line_offset])) {
-            line_offset++;
-        }
+    if (found_macro) /* In the middle of processing a macro, no need to write the line */
+        return NO_ERROR;
 
-        if (line[line_offset] != '\0') {
-            ptr = line + line_offset;
-            word_len = get_word(&ptr);
-            if (copy_n_string(&word, ptr, word_len) == ERR_MEM_ALLOC) {
-                handle_error(ERR_MEM_ALLOC);
-                free(word);
-                return ERR_MEM_ALLOC;
-            }
-
-            for (i = 0; i < num_macros; i++) {
-                if (strcmp(word, macros[i].name) == 0) {
-                    /* Replace the macro name with the macro body */
-                    fprintf(dest->file_ptr, "%*s%s%s\n", (int)line_offset, "",
-                            macros[i].body, ptr);
-                    break;
-                }
-            }
-        }
+    line_offset = 0;
+    while (isspace(line[line_offset])) {
+        line_offset++;
     }
+    ptr = line + line_offset;
+    while (*ptr != '\0') {
+        while (isspace(*ptr)) {
+            fprintf(dest->file_ptr, "%c", *ptr);
+            ptr++;
+        }
+        if (*ptr == '\0')
+            break;
+        word_len = get_word(&ptr);
+        if (copy_n_string(&word, ptr, word_len) == ERR_MEM_ALLOC) {
+            handle_error(ERR_MEM_ALLOC);
+            free(word);
+            return ERR_MEM_ALLOC;
+        }
+        found_macro = 0;
+        for (i = 0; i < num_macros; i++) {
+            if (strcmp(word, macros[i].name) == 0) {
+                /* Replace the macro name with the macro body */
+                found_macro = 1;
+                fprintf(dest->file_ptr, "%s", macros[i].body);
+                break;
+            }
+        }
+        if (strcmp(word, MACRO_END) == 0) {
+            ptr += SKIP_MCR0_END;
+            line_offset = 0;
+            count_spaces(line_offset, ptr);
+            if (ptr[line_offset] != '\0') {
+                handle_error(ERR_EXTRA_TEXT, src);
+                return ERR_EXTRA_TEXT;
+            } else
+                return NO_ERROR;
+    }
+        if (!found_macro)
+            fprintf(dest->file_ptr, "%s", word);
+        free(word);
+
+        /* Move the pointer to the next word */
+        ptr += word_len;
+    }
+    if (!found_macro)
+        fprintf(dest->file_ptr, "\n");
     return NO_ERROR;
 }
+
+
+
 
 /**
 * Adds a new macro with the given name and body to the global array of macros.
