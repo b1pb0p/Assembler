@@ -13,6 +13,9 @@
 macro_s *macros;  /* Global array of macros */
 int num_macros = 0; /* Number of macros in the array */
 
+#define HANDLE_REPORT if(report == ERR_MEM_ALLOC) return ERR_MEM_ALLOC; \
+else if (report != NO_ERROR) error_flag = 1;
+
 #define count_spaces(line_offset,line) while ((line)[line_offset] != '\0' && isspace((line)[line_offset])) \
 (line_offset)++;
 
@@ -36,13 +39,13 @@ status assembler_preprocessor(file_context *src, file_context *dest) {
             handle_error(ERR_LINE_TOO_LONG, src);
         }
         report = handle_macro_start(src, line, &found_macro, &macro_name, &macro_body);
-        HANDLE_REPORT
+        HANDLE_REPORT;
         report = handle_macro_body(src, line, found_macro, &macro_body);
-        HANDLE_REPORT
+        HANDLE_REPORT;
         report = handle_macro_end(src, line, &found_macro, &macro_name, &macro_body);
-        HANDLE_REPORT
+        HANDLE_REPORT;
         report = write_to_file(src, dest, line, found_macro, report);
-        HANDLE_REPORT
+        HANDLE_REPORT;
     }
     /* Reset line counter and rewind files */
     src->lc = 0;
@@ -70,14 +73,14 @@ status handle_macro_start(file_context *src, char *line, int *found_macro,
         if (word_len >= MAX_MACRO_LENGTH) {
             handle_error(ERR_INVAL_MACRO_NAME, src);
             *found_macro = 0;
-            return ERR_INVAL_MACRO_NAME;
+            return FAILURE;
         }
 
         for (i = 0; i < num_macros; i++) {
             if (strncmp(ptr, macros[i].name, strlen(macros[i].name)) == 0) {
                 handle_error(ERR_DUP_MACRO, src);
                 *found_macro = 0;
-                return ERR_DUP_MACRO;
+                return FAILURE;
             }
         }
 
@@ -139,7 +142,7 @@ status handle_macro_body(file_context *src, char *line, int found_macro, char **
             word = get_word(&line);
             if (line[word] != '\0') {
                 handle_error(ERR_EXTRA_TEXT, src);
-                return ERR_EXTRA_TEXT;
+                return FAILURE;
             }
             else
                 return NO_ERROR;
@@ -180,7 +183,7 @@ status handle_macro_end(file_context *src, char *line, int *found_macro,
             add_macro_status = add_macro(*macro_name, *macro_body);
             if (add_macro_status == ERR_MEM_ALLOC) {
                 handle_error(ERR_MEM_ALLOC, src);
-                return FAILURE;
+                return ERR_MEM_ALLOC;
             }
             free(*macro_name);
             free(*macro_body);
@@ -234,7 +237,7 @@ status write_to_file(file_context *src, file_context *dest, char *line, int foun
             count_spaces(line_offset, ptr);
             if (ptr[line_offset] != '\0') {
                 handle_error(ERR_EXTRA_TEXT, src);
-                return ERR_EXTRA_TEXT;
+                return FAILURE;
             } else
                 return NO_ERROR;
     }
@@ -268,17 +271,18 @@ status add_macro(char* name, char* body) {
     status s_name , s_body;
 
     if (num_macros == 0)
-        temp_macro = malloc(DEFAULT_MACROS * sizeof(macro_s));
+        temp_macro = realloc(macros, DEFAULT_MACROS * sizeof(macro_s));
     else if (num_macros >= macro_cap) {
         temp_macro = realloc(macros, (macro_cap * 2) * sizeof(macro_s));
         macro_cap *= 2;
     }
+    else temp_macro = macros; /* make sure we won't raise an unwanted error */
     if (!temp_macro)
         return ERR_MEM_ALLOC;
     macros = temp_macro;
     s_name = copy_string(&macros[num_macros].name, name);
     s_body = copy_string(&macros[num_macros].body, body);
-    if (s_name != NO_ERROR|| s_body != NO_ERROR)
+    if (s_name != NO_ERROR || s_body != NO_ERROR)
         return ERR_MEM_ALLOC;
     num_macros++;
     return NO_ERROR;
