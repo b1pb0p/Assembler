@@ -17,8 +17,6 @@
 #define SKIP_MCR0_END 7 /* endmcro length */
 #define MAX_BUFFER_LENGTH 256
 
-#define HANDLE_REPORT if(report == ERR_MEM_ALLOC) return ERR_MEM_ALLOC;
-
 typedef struct {
     char* name;
     char* body;
