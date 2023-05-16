@@ -49,9 +49,11 @@ status process_file(const char* file_name, int index, int max) {
 
     code = assembler_preprocessor(fc, dest);
     if (code != NO_ERROR) {
-        handle_error(code, dest);
         handle_error(ERR_PRE, dest, index, max);
-        if (dest) remove(dest->file_name);
+        if (dest) {
+            fclose(dest->file_ptr);
+            remove(dest->file_name);
+        }
         evaluate_and_proceed(&code, dest);
         return FAILURE;
     } else {
@@ -61,9 +63,10 @@ status process_file(const char* file_name, int index, int max) {
 }
 
 void evaluate_and_proceed(status* code, file_context* src) {
-    if (*code <= ERR_PRE) {
+    if (*code == ERR_MEM_ALLOC) {
         /* Error Status that require to exit program */
         if (src) free_file_context(src);
+        handle_error(FAILURE);
         exit(*code);
     } else
         *code = NO_ERROR;
