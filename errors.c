@@ -54,6 +54,10 @@ void handle_error(status code, ...) {
         printf("TERMINATED ->\t");
         printf("%s\n", MSG[code]);
     }
+    else if (code == FAILURE) {
+        fprintf(stderr, "TERMINATED ->\t");
+        fprintf(stderr, "%s",MSG[code]);
+    }
     else if (code <= ERR_PRE_DONE) {
         fprintf(stderr, "ERROR ->\t");
         fprintf(stderr, "%s",MSG[code]);

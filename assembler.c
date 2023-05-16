@@ -33,7 +33,7 @@ int main(int argc, char *argv[]) {
       report = process_file(argv[i], i, argc - 1);
     if (report != NO_ERROR) handle_error(ERR_PRE_DONE);
 
-    handle_error(NO_ERROR);
+    handle_error(report);
     atexit(free_macros);
     return 0;
 }
