@@ -82,6 +82,11 @@ size_t get_word(char **ptr) {
  * @return        Status: NO_ERROR if successful, otherwise the error status.
  */
 status copy_string(char** target, const char* source) {
+    if (!source) {
+        handle_error(TERMINATE, "copy_string()");
+        return TERMINATE;
+    }
+
     char* temp = malloc(strlen(source) + 1);
     if (!temp) {
         handle_error(ERR_MEM_ALLOC);
@@ -103,6 +108,11 @@ status copy_string(char** target, const char* source) {
  * @return status, NO_ERROR in case of no error otherwise else the error status.
  */
 status copy_n_string(char** target, const char* source, size_t count) {
+    if (!source) {
+        handle_error(TERMINATE, "copy_n_string()");
+        return TERMINATE;
+    }
+
     char* temp = malloc(count + 1);
     if (!temp) {
         handle_error(ERR_MEM_ALLOC);

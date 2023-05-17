@@ -63,7 +63,7 @@ status process_file(const char* file_name, int index, int max) {
 }
 
 void evaluate_and_proceed(status* code, file_context* src) {
-    if (*code == ERR_MEM_ALLOC) {
+    if (*code == ERR_MEM_ALLOC || *code == TERMINATE) {
         /* Error Status that require to exit program */
         if (src) free_file_context(src);
         handle_error(FAILURE);
