@@ -11,6 +11,7 @@
 const char *MSG[MSG_LEN] = {
         "Assembly completed without errors. Output files generated.",
         "Assembly terminated with errors. No output files generated.",
+        "Error: Invalid function call - %s.",
         "Assembler - Memory allocation error.",
         "First Pass - The first pass stage is finished without errors.",
         "Second Pass - The second pass stage is finished without errors.",
@@ -36,7 +37,8 @@ const char *MSG[MSG_LEN] = {
         "%s - Line too long on line %d. Mustn't exceed 80 characters.",
         "%s - Invalid macro name on line %d.",
         "%s - Duplicate macro name on line %d.",
-        "%s - Missing 'endmcro' on line %d.",
+        "%s - Missing opening 'mcro' on line %d.",
+        "%s - Missing closing 'endmcro' on line %d.",
         "Preprocessor (%d/%d) - No output file generated - %s.",
         "Preprocessor (%d/%d) - Output file successfully generated - %s.",
         "First Pass (%d/%d) - Output file successfully generated - %s.",
@@ -50,6 +52,8 @@ void handle_error(status code, ...) {
     va_list args;
     file_context* fc;
     int num, tot;
+    char *fncall;
+
     if (code == NO_ERROR) {
         printf("TERMINATED ->\t");
         printf("%s\n", MSG[code]);
@@ -57,6 +61,13 @@ void handle_error(status code, ...) {
     else if (code == FAILURE) {
         fprintf(stderr, "TERMINATED ->\t");
         fprintf(stderr, "%s",MSG[code]);
+    }
+    else if (code == TERMINATE) {
+        va_start(args, code);
+        fncall =  va_arg(args, char *);
+        fprintf(stderr, "TERMINATED ->\t");
+        fprintf(stderr,  MSG[code], fncall);
+        va_end(args);
     }
     else if (code <= ERR_PRE_DONE) {
         fprintf(stderr, "ERROR ->\t");
