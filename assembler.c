@@ -39,21 +39,21 @@ int main(int argc, char *argv[]) {
 }
 
 status process_file(const char* file_name, int index, int max) {
-    file_context *fc, *dest;
+    file_context *src, *dest;
     status code = NO_ERROR;
-    fc = create_file_context(file_name, ASSEMBLY_EXT, FILE_MODE_READ, &code);
-    HANDLE_STATUS(fc)
+    src = create_file_context(file_name, ASSEMBLY_EXT, FILE_MODE_READ, &code);
+    HANDLE_STATUS(src)
 
     dest = create_file_context(file_name, PREPROCESSOR_EXT, FILE_MODE_WRITE, &code);
     HANDLE_STATUS(dest)
 
-    code = assembler_preprocessor(fc, dest);
+    code = assembler_preprocessor(src, dest);
+
+    fclose(src->file_ptr);
+    free_file_context(src);
+
     if (code != NO_ERROR) {
         handle_error(ERR_PRE, dest, index, max);
-        if (dest) {
-            fclose(dest->file_ptr);
-            remove(dest->file_name);
-        }
         evaluate_and_proceed(&code, dest);
         return FAILURE;
     } else {
