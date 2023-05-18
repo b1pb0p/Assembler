@@ -10,8 +10,8 @@
 #include "utils.h"
 #include "errors.h"
 
-macro_s *macros;  /* Global array of macros */
-int num_macros = 0; /* Number of macros in the array */
+macro_node* macro_head = NULL; /* Head of the macros linked list */
+macro_node* macro_tail = NULL; /* Tail of the macros linked list */
 
 #define HANDLE_REPORT if(report == ERR_MEM_ALLOC || report == TERMINATE) return TERMINATE; \
 else if (report != NO_ERROR) found_error = 1;
@@ -19,11 +19,13 @@ else if (report != NO_ERROR) found_error = 1;
 #define COUNT_SPACES(line_offset,line) while ((line)[line_offset] != '\0' && isspace((line)[line_offset])) \
 (line_offset)++;
 
+#define IS_EMPTY() (macro_head == NULL)
+
 status assembler_preprocessor(file_context *src, file_context *dest) {
     char line[MAX_BUFFER_LENGTH];
     char *macro_name, *macro_body;
     unsigned int line_len;
-    int found_macro = 0, found_error = 0;
+    int found_macro = 0, found_error = 0, ch;
     status report;
     macro_name = macro_body = NULL;
 
@@ -31,8 +33,18 @@ status assembler_preprocessor(file_context *src, file_context *dest) {
         return FAILURE; /* Unexpected error, probably unreachable */
     rewind(src->file_ptr); /* make sure we read from the beginning */
 
-    while (fscanf(src->file_ptr, "%[^\n]%*c", line) == 1) {
+    while (fscanf(src->file_ptr, "%[^\n]%*c", line) == 1
+            || (ch = fgetc(src->file_ptr)) == '\n') {
         src->lc++;
+
+        if (*line == ';')
+            continue;
+        if (ch == '\n') {
+            fprintf(dest->file_ptr, "\n");
+            ch = -1;
+            continue;
+        }
+
         line_len = strlen(line);
         if (line_len > MAX_LINE_LENGTH) {
             found_error = 1;
@@ -48,19 +60,24 @@ status assembler_preprocessor(file_context *src, file_context *dest) {
         HANDLE_REPORT;
     }
     /* Reset line counter and rewind files */
-    src->lc = 0;
     dest->lc = 0;
-    rewind(src->file_ptr);
     rewind(dest->file_ptr);
-    free_unused_macros();
+
+    if (found_error) { /* Error found, output file should be removed */
+        fclose(dest->file_ptr);
+        remove(dest->file_name);
+    }
+
+    free_macros();
+
     return found_error ? FAILURE : NO_ERROR;
 }
 
 status handle_macro_start(file_context *src, char *line, int *found_macro,
                            char **macro_name, char **macro_body) {
-    char *mcro, *endmcro, ch;
+    char *mcro, *endmcro, ch_m;
     size_t word_len;
-    int i, line_offset = 0;
+    int line_offset = 0;
     status report = NO_ERROR;
 
     mcro = strstr(line, MACRO_START);
@@ -75,26 +92,25 @@ status handle_macro_start(file_context *src, char *line, int *found_macro,
     }
     else {
         if ((mcro && !endmcro) || (endmcro && (mcro < endmcro))) { /* 'mcro' detected */
-            ch = *(mcro + 1 + SKIP_MCRO);
-            if (!endmcro && (isspace(ch) ||  ch == '\0' || ch == '\n'))
-                return NO_ERROR;
             *found_macro = 1;
             mcro += SKIP_MCRO;
+            if (!isspace(*mcro)) {
+                *found_macro = 0;
+                return NO_ERROR;
+            }
             while (*mcro && (*mcro == ' ' || *mcro == '\t')) {
                 mcro++;
             }
             word_len = get_word(&mcro);
 
-            if (word_len >= MAX_MACRO_LENGTH) {
+            if (word_len >= MAX_MACRO_NAME_LENGTH) {
                 handle_error(ERR_INVAL_MACRO_NAME, src);
                 report = FAILURE;
             }
 
-            for (i = 0; i < num_macros; i++) {
-                if (strncmp(mcro, macros[i].name, strlen(macros[i].name)) == 0) {
+            if (is_macro_exists(mcro)) {
                     handle_error(ERR_DUP_MACRO, src);
                     report = FAILURE;
-                }
             }
 
             endmcro = mcro;
@@ -113,7 +129,7 @@ status handle_macro_start(file_context *src, char *line, int *found_macro,
             }
             if(copy_n_string(macro_name, mcro, word_len) != NO_ERROR) return FAILURE;
         }
-        else if (endmcro) {
+        else if (endmcro && (isspace(*(endmcro + 1)) )) {
             handle_error(ERR_MISSING_MACRO, src);
             return FAILURE; /* 'endmcro' detected, without a matching opening 'mcro.' */
         }
@@ -161,7 +177,6 @@ status handle_macro_body(file_context *src, char *line, int found_macro, char **
             return NO_ERROR;
         }
 
-
         *macro_body = (char *)malloc(line_length - line_offset + 2);
         if (*macro_body == NULL) {
             handle_error(ERR_MEM_ALLOC, src);
@@ -200,8 +215,9 @@ status handle_macro_end(char *line, int *found_macro,
 }
 
 status write_to_file(file_context *src, file_context *dest, char *line, int found_macro, int found_error) {
-    int line_offset, i;
+    int line_offset;
     char *ptr, *word = NULL;
+    macro_node *matched_macro;
     size_t word_len;
 
     if (found_error)
@@ -227,24 +243,28 @@ status write_to_file(file_context *src, file_context *dest, char *line, int foun
             return TERMINATE;
         }
         found_macro = 0;
-        for (i = 0; i < num_macros; i++) {
-            if (strcmp(word, macros[i].name) == 0) {
+
+        if ((matched_macro = is_macro_exists(word))) {
                 /* Replace the macro name with the macro body */
                 found_macro = 1;
-                fprintf(dest->file_ptr, "%s", macros[i].body);
-                break;
-            }
+                fprintf(dest->file_ptr, "%s", matched_macro->body);
         }
-        if (strcmp(word, MACRO_END) == 0) {
+        if (strncmp(word, MACRO_END,SKIP_MCRO) == 0) {
             ptr += SKIP_MCR0_END;
             line_offset = 0;
             COUNT_SPACES(line_offset, ptr);
             if (ptr[line_offset] != '\0') {
                 handle_error(ERR_EXTRA_TEXT, src); /* Extraneous text after end of macros */
                 return FAILURE;
-            } else
+            }
+            else
                 return NO_ERROR;
     }
+        else if (strcmp(word, MACRO_START) == 0) {
+            handle_error(ERR_EXTRA_TEXT, src); /* Extraneous text after macro call */
+            return FAILURE;
+        }
+
         if (!found_macro)
             fprintf(dest->file_ptr, "%s", word);
         free(word);
@@ -261,8 +281,7 @@ status write_to_file(file_context *src, file_context *dest, char *line, int foun
 
 
 /**
-* Adds a new macro with the given name and body to the global array of macros.
-* If the array is full, it will be resized to double its current size.
+* Adds a new macro with the given name and body to the global linked list of macros.
 *
 * @param name The name of the macro to add.
 * @param body The body of the macro to add.
@@ -270,58 +289,75 @@ status write_to_file(file_context *src, file_context *dest, char *line, int foun
 * @return status, NO_ERROR in case of no error otherwise else the error status.
  */
 status add_macro(char* name, char* body) {
-    static int macro_cap = DEFAULT_MACROS; /* macro_s capacity */
-    macro_s *temp_macro= NULL;
     status s_name , s_body;
+    macro_node* new_macro = (macro_node*)malloc(sizeof(macro_node));
 
-    if (num_macros == 0)
-        temp_macro = realloc(macros, DEFAULT_MACROS * sizeof(macro_s));
-    else if (num_macros >= macro_cap) {
-        temp_macro = realloc(macros, (macro_cap * 2) * sizeof(macro_s));
-        macro_cap *= 2;
-    }
-    else temp_macro = macros; /* make sure we won't raise an unwanted error */
-    if (!temp_macro) {
+    if (!new_macro) {
         handle_error(ERR_MEM_ALLOC);
         return ERR_MEM_ALLOC;
     }
-    macros = temp_macro;
-    s_name = copy_string(&macros[num_macros].name, name);
-    s_body = copy_string(&macros[num_macros].body, body);
-    if (s_name != NO_ERROR || s_body != NO_ERROR)
+
+    s_name = copy_string(&new_macro->name, name);
+    s_body = copy_string(&new_macro->body, body);
+
+    if (s_name != NO_ERROR || s_body != NO_ERROR) {
+       if (new_macro->name) free(new_macro->name);
+       if (new_macro->body) free(new_macro->body);
+        free(new_macro);
         return TERMINATE;
-    num_macros++;
+    }
+
+    new_macro->next = NULL;
+
+    if (IS_EMPTY()) {
+        macro_head = new_macro;
+        macro_tail = new_macro;
+    } else {
+        macro_tail->next = new_macro;
+        macro_tail = new_macro;
+    }
     return NO_ERROR;
 }
 
 /**
- * Frees the memory allocated for the global array of macros,
- * and resets the counter to 0.
+ * Checks if a macro with the given name exists.
+ *
+ * @param name The name of the macro to check.
+ *
+ * @return A pointer to the matching macro if found, or NULL otherwise.
  */
-void free_macros() {
-    int i;
-    if (!macros) return;
-    for (i = 0; i < num_macros; i++) {
-        free(macros[i].name);
-        free(macros[i].body);
+macro_node* is_macro_exists(char* name) {
+    macro_node* current = macro_head;
+
+    while (current && !IS_EMPTY()) {
+        if (strncmp(current->name, name, strlen(current->name)) == 0)
+            return current; /* matching macro found */
+        current = current->next;
     }
-    free(macros);
-    macros = NULL;
-    num_macros = 0;
+
+    return NULL; /* no matching macro found */
 }
 
+
 /**
- * Frees any unused memory allocated for the macros array by resizing it to the exact size
- * of the used memory. If the array is empty, returns immediately without performing any action.
- *
- * @throws status_type ERR_MEM_ALLOC when there's a memory allocation error during reallocation.
+ * Frees the memory allocated for the linked list of macros,
+ * including the memory allocated for macro names and bodies.
+ * After freeing the memory, the macro list is empty.
  */
-void free_unused_macros() {
-    macro_s *temp_macro = NULL;
-    if (num_macros == 0)
-        return;
-    temp_macro = realloc(macros, num_macros * sizeof(macro_s));
-    if (!temp_macro)
-        handle_error(ERR_MEM_ALLOC);
-    macros = temp_macro;
+void free_macros() {
+    macro_node* current = macro_head;
+    macro_node* next;
+
+    while (current && !IS_EMPTY()) {
+        next = current->next;
+        free(current->name);
+        free(current->body);
+        free(current);
+        current = next;
+    }
+
+    macro_head = NULL;
+    macro_tail = NULL;
 }
+
+
