@@ -58,7 +58,7 @@ status assembler_preprocessor(file_context *src, file_context *dest) {
 
 status handle_macro_start(file_context *src, char *line, int *found_macro,
                            char **macro_name, char **macro_body) {
-    char *mcro, *endmcro;
+    char *mcro, *endmcro, ch;
     size_t word_len;
     int i, line_offset = 0;
     status report = NO_ERROR;
@@ -74,7 +74,10 @@ status handle_macro_start(file_context *src, char *line, int *found_macro,
         }
     }
     else {
-        if ((mcro && !endmcro) || (endmcro && mcro < endmcro)) { /* 'mcro' detected */
+        if ((mcro && !endmcro) || (endmcro && (mcro < endmcro))) { /* 'mcro' detected */
+            ch = *(mcro + 1 + SKIP_MCRO);
+            if (!endmcro && (isspace(ch) ||  ch == '\0' || ch == '\n'))
+                return NO_ERROR;
             *found_macro = 1;
             mcro += SKIP_MCRO;
             while (*mcro && (*mcro == ' ' || *mcro == '\t')) {
