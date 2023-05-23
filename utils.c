@@ -9,11 +9,20 @@
 #include "errors.h"
 #include "utils.h"
 
-
+/**
+ * Creates a file context object, add extension to file name,
+ * and opens the file in the specified mode.
+ *
+ * @param file_name The name of the file.
+ * @param ext The extension to append to the file name.
+ * @param mode The file mode for opening the file (e.g., "r" for read, "w" for write).
+ * @param report Pointer to the status report variable.
+ * @return A pointer to the created file context object if successful, NULL otherwise.
+ */
 file_context* create_file_context(const char* file_name, char* ext, char* mode, status *report) {
     file_context* fc;
     FILE* file = NULL;
-    char* file_name_w_ext;
+    char* file_name_w_ext = NULL;
     size_t len;
 
     fc = malloc(sizeof(file_context));
@@ -23,21 +32,27 @@ file_context* create_file_context(const char* file_name, char* ext, char* mode, 
     }
     len = strlen(file_name) + FILENAME_EXT_LEN + 1;
     file_name_w_ext = malloc(len * sizeof(char));
+
     if (!file_name_w_ext) {
         *report = ERR_MEM_ALLOC;
-        free(fc);
+        free_file_context(fc);
         return NULL;
     }
+
     strcpy(file_name_w_ext, file_name);
     strcat(file_name_w_ext, ext);
+
+    fc->file_name = NULL;
+    fc->file_ptr = NULL;
+
     copy_n_string(&fc->file_name, file_name_w_ext, len);
     free(file_name_w_ext);
-    fc->file_ptr = NULL;
     file = fopen(fc->file_name, mode);
 
     if (!file) {
         handle_error(ERR_OPEN_FILE, fc);
         *report = ERR_OPEN_FILE;
+        free_file_context(fc);
         return NULL;
     }
 
@@ -82,12 +97,13 @@ size_t get_word(char **ptr) {
  * @return        Status: NO_ERROR if successful, otherwise the error status.
  */
 status copy_string(char** target, const char* source) {
+    char* temp = NULL;
     if (!source) {
         handle_error(TERMINATE, "copy_string()");
         return TERMINATE;
     }
 
-    char* temp = malloc(strlen(source) + 1);
+    temp = malloc(strlen(source) + 1);
     if (!temp) {
         handle_error(ERR_MEM_ALLOC);
         return ERR_MEM_ALLOC;
@@ -108,18 +124,20 @@ status copy_string(char** target, const char* source) {
  * @return status, NO_ERROR in case of no error otherwise else the error status.
  */
 status copy_n_string(char** target, const char* source, size_t count) {
+    char* temp = NULL;
     if (!source) {
         handle_error(TERMINATE, "copy_n_string()");
         return TERMINATE;
     }
 
-    char* temp = malloc(count + 1);
+    temp = malloc(count + 1);
     if (!temp) {
         handle_error(ERR_MEM_ALLOC);
         return ERR_MEM_ALLOC;
     }
     strncpy(temp, source, count);
     temp[count] = '\0';
+    if (!*target) free(*target);
     *target = temp;
     return NO_ERROR;
 }

@@ -26,7 +26,7 @@ typedef struct macro_node{
 status assembler_preprocessor(file_context *src, file_context *dest);
 
 status handle_macro_start(file_context *src, char *line, int *found_macro, char **macro_name, char **macro_body);
-status handle_macro_body(file_context *src, char *line, int found_macro, char **macro_body);
+status handle_macro_body(char *line, int found_macro, char **macro_body);
 status handle_macro_end(char *line, int *found_macro, char **macro_name, char **macro_body);
 status write_to_file(file_context *src, file_context *dest, char *line, int found_macro, int found_error);
 status add_macro(char* name, char* body);

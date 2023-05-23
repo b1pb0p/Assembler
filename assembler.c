@@ -8,10 +8,11 @@
 #include "preprocessor.h"
 #include "assembler.h"
 
-#define HANDLE_STATUS(file) if (code != NO_ERROR) { \
-    handle_error(code, (file));                      \
-    evaluate_and_proceed(&code, (file)); \
-}
+#define HANDLE_STATUS(file, code) if ((code) != NO_ERROR) { \
+    handle_error(code, (file));                     \
+    if (file) free_file_context(file);                      \
+    return ERR_MEM_ALLOC;                                                       \
+    }
 
 /*
  *
@@ -22,53 +23,70 @@ FILE **assembler_generate_output();
 
 int main(int argc, char *argv[]) {
     int i;
-    status report;
+    status report = NO_ERROR;
+    file_context** outs = NULL;
 
     if (argc == 1) {
         handle_error(FAILURE);
         exit(FAILURE);
     }
 
-    for (i = 1; i < argc; i++)
-      report = process_file(argv[i], i, argc - 1);
-    if (report != NO_ERROR) handle_error(ERR_PRE_DONE);
+    if (!(outs = malloc(sizeof(file_context*) * (argc - 1)))) {
+        handle_error(ERR_MEM_ALLOC);
+        exit(FAILURE);
+    }
 
+    for (i = 1; i < argc; i++) {
+        report = process_file(argv[i], &outs[i - 1],i, argc - 1);
+        evaluate_and_proceed(&report, outs[i - 1], outs, argc - 1);
+    }
+    /* if (report != NO_ERROR) handle_error(ERR_PRE_DONE); */
+
+
+    free_outs(outs, argc - 1);
     handle_error(report);
-    atexit(free_macros);
+    atexit(free_macros); /* TODO: may be moved to inner preprocess if files are strangers */
     return 0;
 }
 
-status process_file(const char* file_name, int index, int max) {
-    file_context *src, *dest;
+status process_file(const char* file_name, file_context** dest ,int index, int max) {
+    file_context *src = NULL;
     status code = NO_ERROR;
     src = create_file_context(file_name, ASSEMBLY_EXT, FILE_MODE_READ, &code);
-    HANDLE_STATUS(src)
+    HANDLE_STATUS(src, code);
 
-    dest = create_file_context(file_name, PREPROCESSOR_EXT, FILE_MODE_WRITE, &code);
-    HANDLE_STATUS(dest)
+    *dest = create_file_context(file_name, PREPROCESSOR_EXT, FILE_MODE_WRITE, &code);
+    HANDLE_STATUS(*dest, code);
 
-    code = assembler_preprocessor(src, dest);
+    code = assembler_preprocessor(src, *dest);
 
-    fclose(src->file_ptr);
     free_file_context(src);
 
     if (code != NO_ERROR) {
-        handle_error(ERR_PRE, dest, index, max);
-        evaluate_and_proceed(&code, dest);
-        return FAILURE;
+        handle_error(ERR_PRE, *dest, index, max);
+        return ERR_MEM_ALLOC;
     } else {
-        handle_progress(PRE_FILE_OK, dest, index, max);
+        handle_progress(PRE_FILE_OK, *dest, index, max);
         return NO_ERROR;
     }
 }
 
-void evaluate_and_proceed(status* code, file_context* src) {
+void evaluate_and_proceed(status* code, file_context* src, file_context** outs, int members) {
     if (*code == ERR_MEM_ALLOC || *code == TERMINATE) {
         /* Error Status that require to exit program */
         if (src) free_file_context(src);
         handle_error(FAILURE);
+        free_outs(outs, members);
         exit(*code);
     } else
         *code = NO_ERROR;
+}
+
+void free_outs(file_context ** outs, int members) {
+    int i;
+    if (!outs) return;
+    for (i = 0; i < members; i++)
+        if (outs[i]) free_file_context((outs[i]));
+    free(outs);
 }
 

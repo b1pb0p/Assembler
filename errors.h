@@ -45,7 +45,7 @@ typedef enum {
     FIRST_PASS_OK,
     SECOND_PASS_OK,
     ERR_FIRST_PASS,
-    ERR_SECOND_PASS,
+    ERR_SECOND_PASS
 } status;
 
 void handle_error(status code, ...);

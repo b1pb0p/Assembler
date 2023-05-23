@@ -23,11 +23,10 @@ else if (report != NO_ERROR) found_error = 1;
 
 status assembler_preprocessor(file_context *src, file_context *dest) {
     char line[MAX_BUFFER_LENGTH];
-    char *macro_name, *macro_body;
+    char *macro_name = NULL, *macro_body = NULL;
     unsigned int line_len;
-    int found_macro = 0, found_error = 0, ch;
+    int found_macro = 0, found_error = 0, ch = -1;
     status report;
-    macro_name = macro_body = NULL;
 
     if (!src || !dest)
         return FAILURE; /* Unexpected error, probably unreachable */
@@ -52,7 +51,7 @@ status assembler_preprocessor(file_context *src, file_context *dest) {
         }
         report = handle_macro_start(src, line, &found_macro, &macro_name, &macro_body);
         HANDLE_REPORT;
-        report = handle_macro_body(src, line, found_macro, &macro_body);
+        report = handle_macro_body(line, found_macro, &macro_body);
         HANDLE_REPORT;
         report = handle_macro_end(line, &found_macro, &macro_name, &macro_body);
         HANDLE_REPORT;
@@ -68,14 +67,13 @@ status assembler_preprocessor(file_context *src, file_context *dest) {
         remove(dest->file_name);
     }
 
-    free_macros();
-
+    free_macros(); /*TODO: check about shared macros */
     return found_error ? FAILURE : NO_ERROR;
 }
 
 status handle_macro_start(file_context *src, char *line, int *found_macro,
                            char **macro_name, char **macro_body) {
-    char *mcro, *endmcro, ch_m;
+    char *mcro = NULL, *endmcro = NULL;
     size_t word_len;
     int line_offset = 0;
     status report = NO_ERROR;
@@ -138,7 +136,7 @@ status handle_macro_start(file_context *src, char *line, int *found_macro,
 }
 
 
-status handle_macro_body(file_context *src, char *line, int found_macro, char **macro_body) {
+status handle_macro_body(char *line, int found_macro, char **macro_body) {
     static int macro_start = 0;
     int line_offset;
     char *new_macro_body = NULL;
@@ -159,7 +157,7 @@ status handle_macro_body(file_context *src, char *line, int found_macro, char **
 
         new_macro_body = realloc(*macro_body, body_len + line_length - line_offset + 2);
         if (new_macro_body == NULL) {
-            handle_error(ERR_MEM_ALLOC, src);
+            handle_error(ERR_MEM_ALLOC);
             return ERR_MEM_ALLOC;
         }
 
@@ -179,7 +177,7 @@ status handle_macro_body(file_context *src, char *line, int found_macro, char **
 
         *macro_body = (char *)malloc(line_length - line_offset + 2);
         if (*macro_body == NULL) {
-            handle_error(ERR_MEM_ALLOC, src);
+            handle_error(ERR_MEM_ALLOC);
             return ERR_MEM_ALLOC;
         }
 
@@ -193,7 +191,7 @@ status handle_macro_body(file_context *src, char *line, int found_macro, char **
 
 status handle_macro_end(char *line, int *found_macro,
                         char **macro_name, char **macro_body) {
-    char *ptr;
+    char *ptr = NULL;
     status report = NO_ERROR;
 
     if (*found_macro && (ptr = strstr(line, MACRO_END)) != NULL) {
@@ -216,8 +214,8 @@ status handle_macro_end(char *line, int *found_macro,
 
 status write_to_file(file_context *src, file_context *dest, char *line, int found_macro, int found_error) {
     int line_offset;
-    char *ptr, *word = NULL;
-    macro_node *matched_macro;
+    char *ptr = NULL, *word = NULL;
+    macro_node *matched_macro = NULL;
     size_t word_len;
 
     if (found_error)
@@ -253,6 +251,7 @@ status write_to_file(file_context *src, file_context *dest, char *line, int foun
             ptr += SKIP_MCR0_END;
             line_offset = 0;
             COUNT_SPACES(line_offset, ptr);
+            free(word);
             if (ptr[line_offset] != '\0') {
                 handle_error(ERR_EXTRA_TEXT, src); /* Extraneous text after end of macros */
                 return FAILURE;
@@ -262,6 +261,7 @@ status write_to_file(file_context *src, file_context *dest, char *line, int foun
     }
         else if (strcmp(word, MACRO_START) == 0) {
             handle_error(ERR_EXTRA_TEXT, src); /* Extraneous text after macro call */
+            free(word);
             return FAILURE;
         }
 
@@ -289,8 +289,8 @@ status write_to_file(file_context *src, file_context *dest, char *line, int foun
 * @return status, NO_ERROR in case of no error otherwise else the error status.
  */
 status add_macro(char* name, char* body) {
-    status s_name , s_body;
-    macro_node* new_macro = (macro_node*)malloc(sizeof(macro_node));
+    status s_name, s_body;
+    macro_node* new_macro = malloc(sizeof(macro_node));
 
     if (!new_macro) {
         handle_error(ERR_MEM_ALLOC);
