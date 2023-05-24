@@ -9,6 +9,32 @@
 #include "errors.h"
 #include "utils.h"
 
+const char *directives[DIRECTIVE_LEN] = {
+    "data",
+    "string",
+    "entry",
+    "extern"
+};
+
+const char *commands[COMMANDS_LEN] = {
+    "mov",
+    "cmp",
+    "add",
+    "sub",
+    "not",
+    "clr",
+    "lea",
+    "inc",
+    "dec",
+    "jmp",
+    "bne",
+    "red",
+    "prn",
+    "jsr",
+    "rts",
+    "stop"
+};
+
 /**
  * Creates a file context object, add extension to file name,
  * and opens the file in the specified mode.
@@ -141,6 +167,29 @@ status copy_n_string(char** target, const char* source, size_t count) {
     *target = temp;
     return NO_ERROR;
 }
+
+directive is_directive(const char* src) {
+    int i;
+    if (src)
+        for (i = 0; i < DIRECTIVE_LEN; i++)
+            if (strcmp(src, directives[i]) == 0)
+                return i; /* Corresponding directive*/
+    return 0;
+}
+
+command is_command(const char* src) {
+    int i;
+    if (src)
+        for (i = 0; i < COMMANDS_LEN; i++)
+            if (strcmp(src, commands[i]) == 0)
+                return i; /* Corresponding command*/
+    return 0;
+}
+
+
+
+
+
 
 /**
  * Frees the memory occupied by a file_context structure.

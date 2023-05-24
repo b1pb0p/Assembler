@@ -8,7 +8,7 @@
 #include "utils.h"
 
 /* Status messages */
-const char *MSG[MSG_LEN] = {
+const char *msg[MSG_LEN] = {
         "Assembly completed without errors. Output files generated.",
         "Assembly terminated with errors. No output files generated.",
         "Error: Invalid function call - %s.",
@@ -34,8 +34,9 @@ const char *MSG[MSG_LEN] = {
         "%s - Missing '@' symbol on line %d.",
         "%s - Missing ';' symbol after label declaration on line %d.",
         "%s - Missing ',' symbol on line %d.",
-        "%s - Line too long on line %d. Mustn't exceed 80 characters.",
-        "%s - Invalid macro name on line %d.",
+        "%s - Line too long on line %d. Cannot exceed 80 characters.",
+        "%s - Macro too long on line %d. Cannot exceed 31 characters.",
+        "%s - Invalid macro name (%s) on line %d.",
         "%s - Duplicate macro name on line %d.",
         "%s - Missing opening 'mcro' on line %d.",
         "%s - Missing closing 'endmcro' on line %d.",
@@ -56,22 +57,22 @@ void handle_error(status code, ...) {
 
     if (code == NO_ERROR) {
         printf("TERMINATED ->\t");
-        printf("%s\n", MSG[code]);
+        printf("%s\n", msg[code]);
     }
     else if (code == FAILURE) {
         fprintf(stderr, "TERMINATED ->\t");
-        fprintf(stderr, "%s",MSG[code]);
+        fprintf(stderr, "%s", msg[code]);
     }
     else if (code == TERMINATE) {
         va_start(args, code);
         fncall =  va_arg(args, char *);
         fprintf(stderr, "TERMINATED ->\t");
-        fprintf(stderr,  MSG[code], fncall);
+        fprintf(stderr, msg[code], fncall);
         va_end(args);
     }
     else if (code <= ERR_PRE_DONE) {
         fprintf(stderr, "ERROR ->\t");
-        fprintf(stderr, "%s",MSG[code]);
+        fprintf(stderr, "%s", msg[code]);
     }
     else {
         fprintf(stderr, "ERROR ->\t");
@@ -79,15 +80,19 @@ void handle_error(status code, ...) {
         va_start(args, code);
         fc = va_arg(args, file_context*);
         if (!fc)
-            fprintf(stderr, "%s", MSG[FAILURE]);
+            fprintf(stderr, "%s", msg[FAILURE]);
         else if (code < OPEN_FILE)
-            fprintf(stderr, MSG[code], fc->file_name);
+            fprintf(stderr, msg[code], fc->file_name);
+        else if (code == ERR_INVAL_MACRO_NAME) {
+            fncall = va_arg(args, char*);
+            fprintf(stderr, msg[code], fc->file_name, fncall ,fc->lc);
+        }
         else if (code <= ERR_MISSING_ENDMACRO)
-            fprintf(stderr, MSG[code],fc->file_name, fc->lc);
+            fprintf(stderr, msg[code], fc->file_name, fc->lc);
         else {
             num = va_arg(args, int);
             tot = va_arg(args, int);
-            fprintf(stderr, MSG[code], num, tot, fc->file_name);
+            fprintf(stderr, msg[code], num, tot, fc->file_name);
         }
         va_end(args);
     }
@@ -101,20 +106,20 @@ void handle_progress(status code, ...) {
 
     if (code <= PRE_DONE) {
         printf("PROGRESS ->\t");
-        printf("%s", MSG[code]);
+        printf("%s", msg[code]);
     }
     else {
         /* Error messages that require additional arguments */
         va_start(args, code);
         fc = va_arg(args, file_context*);
         if (!fc)
-            printf("%s", MSG[FAILURE]);
+            printf("%s", msg[FAILURE]);
         else if (code <= OPEN_FILE)
-            printf(MSG[code], fc->file_name);
+            printf(msg[code], fc->file_name);
         else {
             num = va_arg(args, int);
             tot = va_arg(args, int);
-            printf( MSG[code], num, tot, fc->file_name);
+            printf(msg[code], num, tot, fc->file_name);
         }
         va_end(args);
     }

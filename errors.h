@@ -6,8 +6,8 @@
 #ifndef ASSEMBLER_ERRORS_H
 #define ASSEMBLER_ERRORS_H
 
-#define MSG_LEN 36
-extern const char *MSG[MSG_LEN];
+#define MSG_LEN 37
+extern const char *msg[MSG_LEN];
 
 typedef enum {
     NO_ERROR,
@@ -36,6 +36,7 @@ typedef enum {
     ERR_MISS_SEMICOLON,
     ERR_MISS_COMMA,
     ERR_LINE_TOO_LONG,
+    ERR_MACRO_TOO_LONG,
     ERR_INVAL_MACRO_NAME,
     ERR_DUP_MACRO,
     ERR_MISSING_MACRO,

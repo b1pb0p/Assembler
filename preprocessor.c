@@ -75,7 +75,7 @@ status handle_macro_start(file_context *src, char *line, int *found_macro,
                            char **macro_name, char **macro_body) {
     char *mcro = NULL, *endmcro = NULL;
     size_t word_len;
-    int line_offset = 0;
+    int line_offset = 0, inval;
     status report = NO_ERROR;
 
     mcro = strstr(line, MACRO_START);
@@ -102,13 +102,23 @@ status handle_macro_start(file_context *src, char *line, int *found_macro,
             word_len = get_word(&mcro);
 
             if (word_len >= MAX_MACRO_NAME_LENGTH) {
-                handle_error(ERR_INVAL_MACRO_NAME, src);
+                handle_error(ERR_MACRO_TOO_LONG, src);
                 report = FAILURE;
             }
 
             if (is_macro_exists(mcro)) {
                     handle_error(ERR_DUP_MACRO, src);
                     report = FAILURE;
+            }
+
+            if ((inval = is_directive(mcro))) {
+                handle_error(ERR_INVAL_MACRO_NAME, src, directives[inval]);
+                report = FAILURE;
+            }
+
+            if ((inval = is_command(mcro))) {
+                handle_error(ERR_INVAL_MACRO_NAME, src, commands[inval]);
+                report = FAILURE;
             }
 
             endmcro = mcro;

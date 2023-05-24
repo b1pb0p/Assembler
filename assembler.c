@@ -74,7 +74,7 @@ status process_file(const char* file_name, file_context** dest ,int index, int m
 void evaluate_and_proceed(status* code, file_context* src, file_context** outs, int members) {
     if (*code == ERR_MEM_ALLOC || *code == TERMINATE) {
         /* Error Status that require to exit program */
-        if (src) free_file_context(src);
+        /* if (src) free_file_context(src); */
         handle_error(FAILURE);
         free_outs(outs, members);
         exit(*code);

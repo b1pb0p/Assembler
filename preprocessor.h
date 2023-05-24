@@ -9,7 +9,7 @@
 #include "utils.h"
 #include "errors.h"
 
-#define MAX_MACRO_NAME_LENGTH 31 /* 30 + '\0' */
+#define MAX_MACRO_NAME_LENGTH 32 /* 31 + '\0' */
 #define MACRO_START "mcro"
 #define MACRO_END "endmcro"
 #define SKIP_MCRO 4 /* mcro length */
