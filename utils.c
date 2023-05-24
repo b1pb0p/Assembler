@@ -61,7 +61,7 @@ file_context* create_file_context(const char* file_name, char* ext, char* mode, 
 
     if (!file_name_w_ext) {
         *report = ERR_MEM_ALLOC;
-        free_file_context(fc);
+        free_file_context(&fc);
         return NULL;
     }
 
@@ -78,7 +78,7 @@ file_context* create_file_context(const char* file_name, char* ext, char* mode, 
     if (!file) {
         handle_error(ERR_OPEN_FILE, fc);
         *report = ERR_OPEN_FILE;
-        free_file_context(fc);
+        free_file_context(&fc);
         return NULL;
     }
 
@@ -186,25 +186,21 @@ command is_command(const char* src) {
     return 0;
 }
 
-
-
-
-
-
 /**
  * Frees the memory occupied by a file_context structure.
  * Closes the file pointer if it's open and frees the dynamically allocated file name.
  *
  * @param context The file_context structure to be freed.
  */
-void free_file_context(file_context* context) {
-    if (context != NULL) {
-        if (context->file_ptr != NULL)
-            fclose(context->file_ptr);
+void free_file_context(file_context** context) {
+    if (*context != NULL) {
+        if ((*context)->file_ptr != NULL)
+            fclose((*context)->file_ptr);
 
-        if (context->file_name != NULL)
-            free(context->file_name);
+        if ((*context)->file_name != NULL)
+            free((*context)->file_name);
 
-        free(context);
+        free(*context);
+        *context = NULL;
     }
 }

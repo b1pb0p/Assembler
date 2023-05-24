@@ -62,8 +62,10 @@ status assembler_preprocessor(file_context *src, file_context *dest) {
     dest->lc = 0;
     rewind(dest->file_ptr);
 
+
     if (found_error) { /* Error found, output file should be removed */
         fclose(dest->file_ptr);
+        dest->file_ptr = NULL;
         remove(dest->file_name);
     }
 
@@ -73,7 +75,7 @@ status assembler_preprocessor(file_context *src, file_context *dest) {
 
 status handle_macro_start(file_context *src, char *line, int *found_macro,
                            char **macro_name, char **macro_body) {
-    char *mcro = NULL, *endmcro = NULL;
+    char *mcro = NULL, *endmcro = NULL, *word = NULL;
     size_t word_len;
     int line_offset = 0, inval;
     status report = NO_ERROR;
@@ -101,25 +103,32 @@ status handle_macro_start(file_context *src, char *line, int *found_macro,
             }
             word_len = get_word(&mcro);
 
+            if (copy_n_string(&word, mcro, word_len) != NO_ERROR) {
+                free(word);
+                return ERR_MEM_ALLOC;
+            }
+
             if (word_len >= MAX_MACRO_NAME_LENGTH) {
                 handle_error(ERR_MACRO_TOO_LONG, src);
                 report = FAILURE;
             }
 
-            if (is_macro_exists(mcro)) {
+            if (is_macro_exists(word)) {
                     handle_error(ERR_DUP_MACRO, src);
                     report = FAILURE;
             }
 
-            if ((inval = is_directive(mcro))) {
+            if ((inval = is_directive(word))) {
                 handle_error(ERR_INVAL_MACRO_NAME, src, directives[inval]);
                 report = FAILURE;
             }
 
-            if ((inval = is_command(mcro))) {
+            if ((inval = is_command(word))) {
                 handle_error(ERR_INVAL_MACRO_NAME, src, commands[inval]);
                 report = FAILURE;
             }
+
+            if (word) free(word);
 
             endmcro = mcro;
             COUNT_SPACES(line_offset, endmcro);
@@ -277,7 +286,7 @@ status write_to_file(file_context *src, file_context *dest, char *line, int foun
 
         if (!found_macro)
             fprintf(dest->file_ptr, "%s", word);
-        free(word);
+        if (word) free(word);
 
         /* Move the pointer to the next word */
         ptr += word_len;
@@ -340,7 +349,7 @@ macro_node* is_macro_exists(char* name) {
     macro_node* current = macro_head;
 
     while (current && !IS_EMPTY()) {
-        if (strncmp(current->name, name, strlen(current->name)) == 0)
+        if (strcmp(current->name, name) == 0)
             return current; /* matching macro found */
         current = current->next;
     }

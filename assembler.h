@@ -10,6 +10,6 @@
 #define EXTERNAL_EXT ".ext"
 
 status process_file(const char* file_name, file_context** dest ,int index, int max);
-void evaluate_and_proceed(status* code, file_context* src, file_context** outs,  int members);
-void free_outs(file_context ** outs, int members);
+void evaluate_and_proceed(const status* code, file_context*** outs, int members);
+void free_outs(file_context *** outs, int members);
 #endif

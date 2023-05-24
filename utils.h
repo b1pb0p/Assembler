@@ -66,5 +66,5 @@ status copy_string(char** target, const char* source);
 status copy_n_string(char** target, const char* source, size_t count);
 directive is_directive(const char* src);
 command is_command(const char* src);
-void free_file_context(file_context* context);
+void free_file_context(file_context** context);
 #endif

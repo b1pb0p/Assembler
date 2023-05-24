@@ -8,9 +8,9 @@
 #include "preprocessor.h"
 #include "assembler.h"
 
-#define HANDLE_STATUS(file, code) if ((code) != NO_ERROR) { \
+#define HANDLE_STATUS(file, code) if ((code) == ERR_MEM_ALLOC) { \
     handle_error(code, (file));                     \
-    if (file) free_file_context(file);                      \
+    if (file) free_file_context(&(file));                      \
     return ERR_MEM_ALLOC;                                                       \
     }
 
@@ -38,12 +38,11 @@ int main(int argc, char *argv[]) {
 
     for (i = 1; i < argc; i++) {
         report = process_file(argv[i], &outs[i - 1],i, argc - 1);
-        evaluate_and_proceed(&report, outs[i - 1], outs, argc - 1);
     }
     /* if (report != NO_ERROR) handle_error(ERR_PRE_DONE); */
 
 
-    free_outs(outs, argc - 1);
+    free_outs(&outs, argc - 1);
     handle_error(report);
     atexit(free_macros); /* TODO: may be moved to inner preprocess if files are strangers */
     return 0;
@@ -60,33 +59,32 @@ status process_file(const char* file_name, file_context** dest ,int index, int m
 
     code = assembler_preprocessor(src, *dest);
 
-    free_file_context(src);
+    if (src) free_file_context(&src);
 
     if (code != NO_ERROR) {
         handle_error(ERR_PRE, *dest, index, max);
-        return ERR_MEM_ALLOC;
+        free_file_context(dest);
+        return FAILURE;
     } else {
         handle_progress(PRE_FILE_OK, *dest, index, max);
         return NO_ERROR;
     }
 }
 
-void evaluate_and_proceed(status* code, file_context* src, file_context** outs, int members) {
+ /* void evaluate_and_proceed(const status* code, file_context*** outs, int members) {
     if (*code == ERR_MEM_ALLOC || *code == TERMINATE) {
-        /* Error Status that require to exit program */
-        /* if (src) free_file_context(src); */
-        handle_error(FAILURE);
         free_outs(outs, members);
         exit(*code);
-    } else
-        *code = NO_ERROR;
+    }
 }
+  */
 
-void free_outs(file_context ** outs, int members) {
+void free_outs(file_context *** outs, int members) {
     int i;
-    if (!outs) return;
+    if (!*outs) return;
     for (i = 0; i < members; i++)
-        if (outs[i]) free_file_context((outs[i]));
-    free(outs);
+        if (*outs[i]) free_file_context(outs[i]);
+    free(*outs);
+    *outs = NULL;
 }
 
