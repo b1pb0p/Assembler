@@ -2,6 +2,7 @@
 * Error Handling
 * @author Bar Toplian - 323869065- bar.toplian@gmail.com
 */
+
 #include <stdio.h>
 #include <stdarg.h>
 #include "errors.h"
@@ -13,12 +14,6 @@ const char *msg[MSG_LEN] = {
         "Assembly terminated with errors. No output files generated.",
         "Error: Invalid function call - %s.",
         "Assembler - Memory allocation error.",
-        "First Pass - The first pass stage is finished without errors.",
-        "Second Pass - The second pass stage is finished without errors.",
-        "Preprocessor - The preprocessing stage is finished without errors.",
-        "First Pass - The first pass stage is finished with errors.",
-        "Second Pass - The second pass stage is finished with errors.",
-        "Preprocessor - The preprocessing stage is finished with errors.",
         "Assembler - Unable to open file - %s",
         "Assembler - File opened successfully - %s.",
         "%s - Invalid opcode on line %d.",
@@ -45,10 +40,19 @@ const char *msg[MSG_LEN] = {
         "First Pass (%d/%d) - Output file successfully generated - %s.",
         "Second Pass (%d/%d) - Output file successfully generated - %s.",
         "First Pass (%d/%d) - No output file generated - %s.",
-        "Second Pass (%d/%d) - No output file generated - %s."
+        "Second Pass (%d/%d) - No output file generated - %s.",
+        "Assembler process for - %s.as terminated with errors. No output files generated.",
 };
 
-
+/**
+ * Handles and reports errors during the assembly process.
+ *
+ * Handles different error codes and formats the error messages accordingly.
+ * Additional arguments may be required for specific error messages.
+ *
+ * @param code      The error code indicating the type of error.
+ * @param ...       Additional arguments depending on the error code.
+ */
 void handle_error(status code, ...) {
     va_list args;
     file_context* fc;
@@ -63,16 +67,12 @@ void handle_error(status code, ...) {
         fprintf(stderr, "TERMINATED ->\t");
         fprintf(stderr, "%s", msg[code]);
     }
-    else if (code == TERMINATE) {
+    else if (code == TERMINATE || code == ERR_FOUND_ASSEMBLER) {
         va_start(args, code);
         fncall =  va_arg(args, char *);
         fprintf(stderr, "TERMINATED ->\t");
         fprintf(stderr, msg[code], fncall);
         va_end(args);
-    }
-    else if (code <= ERR_PRE_DONE) {
-        fprintf(stderr, "ERROR ->\t");
-        fprintf(stderr, "%s", msg[code]);
     }
     else {
         fprintf(stderr, "ERROR ->\t");
@@ -99,17 +99,25 @@ void handle_error(status code, ...) {
     fprintf(stderr, "\n");
 }
 
+/**
+ * Handles and reports progress messages during the assembly process.
+ *
+ * Handles different progress codes and formats the progress messages accordingly.
+ * Additional arguments may be required for specific progress messages.
+ *
+ * @param code      The progress code indicating the type of progress.
+ * @param ...       Additional arguments depending on the progress code.
+ */
 void handle_progress(status code, ...) {
     va_list args;
     file_context *fc;
     int num, tot;
 
-    if (code <= PRE_DONE) {
+    if (code == NO_ERROR) {
         printf("PROGRESS ->\t");
         printf("%s", msg[code]);
     }
     else {
-        /* Error messages that require additional arguments */
         va_start(args, code);
         fc = va_arg(args, file_context*);
         if (!fc)

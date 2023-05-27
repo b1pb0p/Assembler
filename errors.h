@@ -14,12 +14,6 @@ typedef enum {
     FAILURE,
     TERMINATE,
     ERR_MEM_ALLOC,
-    FIRST_PASS_DONE,
-    SECOND_PASS_DONE,
-    PRE_DONE,
-    ERR_FIRST_PASS_DONE,
-    ERR_SECOND_PASS_DONE,
-    ERR_PRE_DONE,
     ERR_OPEN_FILE,
     OPEN_FILE,
     ERR_INVAL_OPCODE,
@@ -46,7 +40,8 @@ typedef enum {
     FIRST_PASS_OK,
     SECOND_PASS_OK,
     ERR_FIRST_PASS,
-    ERR_SECOND_PASS
+    ERR_SECOND_PASS,
+    ERR_FOUND_ASSEMBLER
 } status;
 
 void handle_error(status code, ...);

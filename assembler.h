@@ -1,3 +1,8 @@
+/* assembler.h
+ * Assembler execute function and file extensions.
+ * @author Bar Toplian - 323869065- bar.toplian@gmail.com
+ */
+
 #ifndef ASSEMBLER_ASSEMBLER_H
 #define ASSEMBLER_ASSEMBLER_H
 

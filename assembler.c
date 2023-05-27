@@ -1,6 +1,7 @@
 /* Assembler Project in 20465 - System Programming Laboratory
  * @author Bar Toplian - 323869065- bar.toplian@gmail.com
  */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include "errors.h"
@@ -9,9 +10,15 @@
 #include "assembler.h"
 
 #define HANDLE_STATUS(file, code) if ((code) == ERR_MEM_ALLOC) { \
-    handle_error(code, (file));                     \
-    if (file) free_file_context(&(file));                      \
-    return ERR_MEM_ALLOC;                                                       \
+    handle_error(code, (file)); \
+    if (file) free_file_context(&(file)); \
+    return ERR_MEM_ALLOC; \
+    }
+
+#define CHECK_ERROR_CONTINUE(report, file) \
+    if ((report) != NO_ERROR) {      \
+    handle_error(ERR_FOUND_ASSEMBLER, (file));\
+        continue;                    \
     }
 
 /*
@@ -38,16 +45,30 @@ int main(int argc, char *argv[]) {
 
     for (i = 1; i < argc; i++) {
         report = process_file(argv[i], &outs[i - 1],i, argc - 1);
+        CHECK_ERROR_CONTINUE(report, argv[i]);
+
     }
-    /* if (report != NO_ERROR) handle_error(ERR_PRE_DONE); */
 
 
     free_outs(&outs, argc - 1);
     handle_error(report);
-    atexit(free_macros); /* TODO: may be moved to inner preprocess if files are strangers */
     return 0;
 }
 
+/**
+ * Processes the input source file for assembler preprocessing.
+ *
+ * Reads the source file and process it accordingly by the assembler passes and the preprocessor.
+
+ *
+ * @param file_name     The name of the input source file to process.
+ * @param dest          Pointer to the destination file_context struct.
+ * @param index         The index of the file being processed.
+ * @param max           The total number of files to be processed.
+ *
+ * @return The status of the file processing.
+ * @return NO_ERROR if successful, or FAILURE if an error occurred.
+ */
 status process_file(const char* file_name, file_context** dest ,int index, int max) {
     file_context *src = NULL;
     status code = NO_ERROR;
@@ -71,13 +92,13 @@ status process_file(const char* file_name, file_context** dest ,int index, int m
     }
 }
 
- /* void evaluate_and_proceed(const status* code, file_context*** outs, int members) {
-    if (*code == ERR_MEM_ALLOC || *code == TERMINATE) {
-        free_outs(outs, members);
-        exit(*code);
-    }
+/* void evaluate_and_proceed(const status* code, file_context*** outs, int members) {
+   if (*code == ERR_MEM_ALLOC || *code == TERMINATE) {
+       free_outs(outs, members);
+       exit(*code);
+   }
 }
-  */
+ */
 
 void free_outs(file_context *** outs, int members) {
     int i;

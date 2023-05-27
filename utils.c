@@ -2,6 +2,7 @@
  * declaration for utilities functions, handling errors and managing input
  * @author Bar Toplian - 323869065- bar.toplian@gmail.com
  */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -81,6 +82,8 @@ file_context* create_file_context(const char* file_name, char* ext, char* mode, 
         free_file_context(&fc);
         return NULL;
     }
+
+    handle_progress(OPEN_FILE, fc);
 
     fc->file_ptr = file;
     fc->ic = 0;

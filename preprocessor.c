@@ -2,6 +2,7 @@
  * preprocessor functions.
  * @author Bar Toplian - 323869065- bar.toplian@gmail.com
  */
+
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -21,6 +22,18 @@ else if (report != NO_ERROR) found_error = 1;
 
 #define IS_EMPTY() (macro_head == NULL)
 
+/**
+ * Processes the input source file for assembler preprocessing.
+ *
+ * Reads the source file, handles macros, and writes the preprocessed content to the destination file.
+ * Handle macro expansion, detection of line length errors, and reporting of errors.
+ *
+ * @param src   Pointer to the source file_context struct.
+ * @param dest  Pointer to the destination file_context struct.
+ *
+ * @return      The status of the preprocessing operation.
+ * @return NO_ERROR if successful, or an appropriate error status otherwise.
+ */
 status assembler_preprocessor(file_context *src, file_context *dest) {
     char line[MAX_BUFFER_LENGTH];
     char *macro_name = NULL, *macro_body = NULL;
@@ -69,10 +82,25 @@ status assembler_preprocessor(file_context *src, file_context *dest) {
         remove(dest->file_name);
     }
 
-    free_macros(); /*TODO: check about shared macros */
+    free_macros();
     return found_error ? FAILURE : NO_ERROR;
 }
 
+/**
+ * Handles the start of a macro definition in the input line.
+ *
+ * Checks if the current line contains the start of a macro definition.
+ * If a macro definition is found, it extracts the macro name and initializes the macro body.
+ *
+ * @param src           Pointer to the source file_context struct.
+ * @param line          The input line to be processed.
+ * @param found_macro   Pointer to a flag indicating whether a macro is found.
+ * @param macro_name    Pointer to store the name of the macro.
+ * @param macro_body    Pointer to store the body of the macro.
+ *
+ * @return              The status of the handling operation.
+ * @return NO_ERROR if successful, or an appropriate error status otherwise.
+ */
 status handle_macro_start(file_context *src, char *line, int *found_macro,
                            char **macro_name, char **macro_body) {
     char *mcro = NULL, *endmcro = NULL, *word = NULL;
@@ -154,7 +182,19 @@ status handle_macro_start(file_context *src, char *line, int *found_macro,
     return report;
 }
 
-
+/**
+ * Handles the body of a macro definition in the input line.
+ *
+ * Checks if the current line is part of a macro definition.
+ * If a macro definition is ongoing, it appends the line to the macro body.
+ *
+ * @param line          The input line to be processed.
+ * @param found_macro   Flag indicating whether a macro is found.
+ * @param macro_body    Pointer to store the body of the macro.
+ *
+ * @return              The status of the handling operation.
+ * @return NO_ERROR if successful, or an appropriate error status otherwise.
+ */
 status handle_macro_body(char *line, int found_macro, char **macro_body) {
     static int macro_start = 0;
     int line_offset;
@@ -207,7 +247,20 @@ status handle_macro_body(char *line, int found_macro, char **macro_body) {
     return NO_ERROR;
 }
 
-
+/**
+ * Handles the end of a macro definition in the input line.
+ *
+ * Checks if the current line marks the end of a macro definition.
+ * If a macro definition is completed, it finalizes the macro body and updates the macro definition.
+ *
+ * @param line          The input line to be processed.
+ * @param found_macro   Pointer to a flag indicating whether a macro is found.
+ * @param macro_name    Pointer to store the name of the macro.
+ * @param macro_body    Pointer to store the body of the macro.
+ *
+ * @return              The status of the handling operation.
+ * @return NO_ERROR if successful, or an appropriate error status otherwise.
+ */
 status handle_macro_end(char *line, int *found_macro,
                         char **macro_name, char **macro_body) {
     char *ptr = NULL;
@@ -231,6 +284,20 @@ status handle_macro_end(char *line, int *found_macro,
     return report;
 }
 
+/**
+ * Writes the preprocessed line to the destination file.
+ *
+ * Performs additional checks to handle macro expansion and line length errors.
+ *
+ * @param src           Pointer to the source file_context struct.
+ * @param dest          Pointer to the destination file_context struct.
+ * @param line          The input line to be processed.
+ * @param found_macro   Flag indicating whether a macro is found.
+ * @param found_error   Flag indicating whether an error is found.
+ *
+ * @return              The status of the writing operation.
+ * @return NO_ERROR if successful, or an appropriate error status otherwise.
+ */
 status write_to_file(file_context *src, file_context *dest, char *line, int found_macro, int found_error) {
     int line_offset;
     char *ptr = NULL, *word = NULL;
