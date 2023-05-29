@@ -19,8 +19,9 @@
     if ((report) != NO_ERROR) {      \
     handle_error(ERR_FOUND_ASSEMBLER, (file));\
         continue;                    \
-    }
-
+    }                                      \
+else \
+break;
 /*
  *
 status assembler_first_pass(file_context* file_c);
@@ -30,7 +31,7 @@ FILE **assembler_generate_output();
 
 int main(int argc, char *argv[]) {
     int i;
-    status report = NO_ERROR;
+    status report;
     file_context** outs = NULL;
 
     if (argc == 1) {
@@ -44,14 +45,14 @@ int main(int argc, char *argv[]) {
     }
 
     for (i = 1; i < argc; i++) {
-        report = process_file(argv[i], &outs[i - 1],i, argc - 1);
+        report = preprocess_file(argv[i], &outs[i - 1], i, argc - 1);
         CHECK_ERROR_CONTINUE(report, argv[i]);
 
     }
 
 
     free_outs(&outs, argc - 1);
-    handle_error(report);
+    /* TODO: update goodbye message */
     return 0;
 }
 
@@ -69,13 +70,16 @@ int main(int argc, char *argv[]) {
  * @return The status of the file processing.
  * @return NO_ERROR if successful, or FAILURE if an error occurred.
  */
-status process_file(const char* file_name, file_context** dest ,int index, int max) {
+status preprocess_file(const char* file_name, file_context** dest , int index, int max) {
     file_context *src = NULL;
     status code = NO_ERROR;
-    src = create_file_context(file_name, ASSEMBLY_EXT, FILE_MODE_READ, &code);
+
+    src = create_file_context(file_name, ASSEMBLY_EXT, FILE_EXT_LEN, FILE_MODE_READ, &code);
     HANDLE_STATUS(src, code);
 
-    *dest = create_file_context(file_name, PREPROCESSOR_EXT, FILE_MODE_WRITE, &code);
+    handle_progress(OPEN_FILE, src);
+
+    *dest = create_file_context(file_name, PREPROCESSOR_EXT,  FILE_EXT_LEN, FILE_MODE_WRITE, &code);
     HANDLE_STATUS(*dest, code);
 
     code = assembler_preprocessor(src, *dest);

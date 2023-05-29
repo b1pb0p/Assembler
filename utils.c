@@ -46,7 +46,7 @@ const char *commands[COMMANDS_LEN] = {
  * @param report Pointer to the status report variable.
  * @return A pointer to the created file context object if successful, NULL otherwise.
  */
-file_context* create_file_context(const char* file_name, char* ext, char* mode, status *report) {
+file_context* create_file_context(const char* file_name, char* ext, size_t ext_len, char* mode, status *report) {
     file_context* fc;
     FILE* file = NULL;
     char* file_name_w_ext = NULL;
@@ -57,7 +57,8 @@ file_context* create_file_context(const char* file_name, char* ext, char* mode, 
         *report = ERR_MEM_ALLOC;
         return fc;
     }
-    len = strlen(file_name) + FILENAME_EXT_LEN + 1;
+
+    len = strlen(file_name) + ext_len + 1;
     file_name_w_ext = malloc(len * sizeof(char));
 
     if (!file_name_w_ext) {
@@ -83,12 +84,10 @@ file_context* create_file_context(const char* file_name, char* ext, char* mode, 
         return NULL;
     }
 
-    handle_progress(OPEN_FILE, fc);
-
     fc->file_ptr = file;
     fc->ic = 0;
     fc->dc = 0;
-    fc->lc = 0;
+    fc->lc = 1; /* line starts from 1 */
     *report = NO_ERROR;
     return fc;
 }
