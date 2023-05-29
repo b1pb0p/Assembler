@@ -16,6 +16,7 @@ const char *msg[MSG_LEN] = {
         "Assembler - Memory allocation error.",
         "Assembler - Unable to open file - %s",
         "Assembler - File opened successfully - %s.",
+        "%s - Line cannot start with a number on line %d",
         "%s - Invalid opcode on line %d.",
         "%s - Invalid operand on line %d.",
         "%s - Missing operand on line %d.",

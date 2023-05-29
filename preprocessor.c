@@ -47,7 +47,6 @@ status assembler_preprocessor(file_context *src, file_context *dest) {
 
     while (fscanf(src->file_ptr, "%[^\n]%*c", line) == 1
             || (ch = fgetc(src->file_ptr)) == '\n') {
-        src->lc++;
 
         if (*line == ';')
             continue;
@@ -55,6 +54,11 @@ status assembler_preprocessor(file_context *src, file_context *dest) {
             fprintf(dest->file_ptr, "\n");
             ch = -1;
             continue;
+        }
+
+        if (isdigit(*line)) {  /* TODO: check if a line can start with a digit */
+            found_error = 1;
+            handle_error(ERR_LINE_START_DIGIT, src);
         }
 
         line_len = strlen(line);
@@ -70,6 +74,8 @@ status assembler_preprocessor(file_context *src, file_context *dest) {
         HANDLE_REPORT;
         report = write_to_file(src, dest, line, found_macro, found_error);
         HANDLE_REPORT;
+
+        src->lc++;
     }
     /* Reset line counter and rewind files */
     dest->lc = 0;
@@ -141,6 +147,11 @@ status handle_macro_start(file_context *src, char *line, int *found_macro,
                 report = FAILURE;
             }
 
+            if (isdigit(*word)) {
+                handle_error(ERR_INVAL_MACRO_NAME, src, word);
+                report = FAILURE;
+            }
+
             if (is_macro_exists(word)) {
                     handle_error(ERR_DUP_MACRO, src);
                     report = FAILURE;
@@ -155,6 +166,7 @@ status handle_macro_start(file_context *src, char *line, int *found_macro,
                 handle_error(ERR_INVAL_MACRO_NAME, src, commands[inval]);
                 report = FAILURE;
             }
+
 
             if (word) free(word);
 
