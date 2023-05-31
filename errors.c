@@ -12,7 +12,7 @@
 const char *msg[MSG_LEN] = {
         "Assembly completed without errors. Output files generated.",
         "Assembly terminated with errors. No output files generated.",
-        "Error: Invalid function call - %s.",
+        "Internal Error - Invalid function call - %s.",
         "Assembler - Memory allocation error.",
         "Assembler - Unable to open file - %s",
         "Assembler - File opened successfully - %s.",
