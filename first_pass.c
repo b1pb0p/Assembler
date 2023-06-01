@@ -6,9 +6,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 #include "first_pass.h"
+#include "utils.h"
 #include "errors.h"
 
+status assembler_first_pass(file_context* src) {
+    return NO_ERROR;
+}
 
 /**
  * Converts a decimal number to a binary string representation.
@@ -18,18 +23,18 @@
  * @return A dynamically allocated binary string representation of the decimal number, or NULL if memory allocation fails.
  */
 char* decimal_to_binary12(int decimal) {
-    char* binary = (char*)malloc((BINARY_BITS + 1) * sizeof(char));
+    int i, carry;
+    int is_negative = 0;
+    char* binary = malloc((BINARY_BITS + 1) * sizeof(char));
+
     if (!binary) {
         handle_error(ERR_MEM_ALLOC);
         return NULL;
     }
 
-    int i;
-    int isNegative = 0;
-
     if (decimal < 0) {
         decimal = -decimal;
-        isNegative = 1;
+        is_negative = 1;
     }
 
     for (i = BINARY_BITS - 1; i >= 0; i--) {
@@ -37,12 +42,12 @@ char* decimal_to_binary12(int decimal) {
         decimal /= 2;
     }
 
-    if (isNegative) {
-        /* Two's complement for negative numbers */
-        for (i = 0; i < BINARY_BITS; i++) {
+    if (is_negative) {
+        /* Two's complement for is_negative numbers */
+        for (i = 0; i < BINARY_BITS; i++)
             binary[i] = (binary[i] == '0') ? '1' : '0';
-        }
-        int carry = 1;
+
+        carry = 1;
         for (i = BINARY_BITS - 1; i >= 0; i--) {
             int sum = (binary[i] - '0') + carry;
             binary[i] = (char)((sum % 2) + '0');
@@ -65,22 +70,22 @@ char* decimal_to_binary12(int decimal) {
  */
 char* truncate_string(const char* input, int length) {
     unsigned int input_len = strlen(input);
-    unsigned int truncate_len = length;
-    if (truncate_len > input_len) {
+    unsigned int truncate_len = input_len - length;
+    char* truncated;
+    if (length >= input_len) {
         handle_error(TERMINATE, "truncate_string()");
         return NULL;
     }
 
-    truncate_len = input_len - truncate_len;
-
-    char* truncated = (char*)malloc((truncate_len + 1) * sizeof(char));
+    truncated = malloc((length + 1) * sizeof(char));
     if (!truncated) {
         handle_error(ERR_MEM_ALLOC);
         return NULL;
     }
 
-    strcpy(truncated, input + truncate_len);
-    truncated[truncate_len] = '\0';
+    strncpy(truncated, input + truncate_len, length);
+    truncated[length] = '\0';
+
     return truncated;
 }
 
@@ -126,178 +131,262 @@ char* convert_bin_to_base64(const char* binary) {
 }
 
 /**
- * Concatenates the binary representations of four components into a 12-bit binary string.
- * Concatenating by this format ___ ____ ___ __ for each parameter respectively.
+ * Concatenates the binary representations of components into a 12-bit binary string based on the specified action.
  *
- * @param src_op   The source operand binary representation.
- * @param opcode   The opcode binary representation.
- * @param dest_op  The destination operand binary representation.
- * @param a_r_e    The A/R/E (Addressing/Record/Extended) bits binary representation.
+ * @param action   The action indicating the concatenation type (concat_actions enum).
+ * @param ...      Variable arguments depending on the action type.
  *
  * @return A dynamically allocated 12-bit binary string representation of the concatenated components,
- *         or NULL if memory allocation fails or any of the input strings are truncated incorrectly.
+ *         or NULL if memory allocation fails or the input strings are truncated incorrectly.
  */
-char* concat_12bits(const char* src_op, const char* opcode, const char* dest_op, const char* a_r_e) {
-    /* ___ ____ ___ __ */
-    char *tr_src, *tr_opcode, *tr_dest, *tr_are, *cat_str;
-    cat_str = NULL;
-    cat_str = calloc(BINARY_BITS + 1, sizeof(char));
-    tr_src = truncate_string(src_op, SRC_DEST_OP_BINARY_LEN);
-    tr_opcode = truncate_string(opcode, OPCODE_BINARY_LEN);
-    tr_dest = truncate_string(dest_op, SRC_DEST_OP_BINARY_LEN);
-    tr_are = truncate_string(a_r_e, A_R_E_BINARY_LEN);
+char* fconcat_12bits(concat_actions action , ... ) {
+    va_list args;
+    char* src_op;
+    char* opcode;
+    char* dest_op;
+    char* a_r_e;
+    char* cat_str = calloc(BINARY_BITS + 1, sizeof(char));
 
-    if (!(cat_str && tr_src && tr_opcode && tr_dest && tr_are)) {
-        if (cat_str) free(cat_str);
-        if (tr_src) free(tr_src);
-        if (tr_opcode) free(tr_opcode);
-        if (tr_dest) free(tr_dest);
-        if (tr_are) free(tr_are);
+    if (!cat_str) {
+        printf("error");
+        return NULL;
+    }
+    va_start(args, action);
 
-        handle_error(ERR_MEM_ALLOC);
+    if (action == DEFAULT_12BIT) {
+        /* ___ ____ ___ __  - src, opcode, dest, a/r/e */
+        src_op = truncate_string(va_arg(args, const char*), SRC_DEST_OP_BINARY_LEN);
+        opcode = truncate_string(va_arg(args, const char*), OPCODE_BINARY_LEN);
+        dest_op = truncate_string(va_arg(args, const char*), SRC_DEST_OP_BINARY_LEN);
+        a_r_e = truncate_string(va_arg(args, const char*), A_R_E_BINARY_LEN);
+
+        if (!(src_op && opcode && dest_op && a_r_e)) {
+            free(cat_str);
+            if (src_op) free(src_op);
+            if (opcode) free(opcode);
+            if (dest_op) free(dest_op);
+            if (a_r_e) free(a_r_e);
+
+            handle_error(ERR_MEM_ALLOC);
+            return NULL;
+        }
+
+        cat_str = strcat(cat_str,src_op);
+        cat_str = strcat(cat_str,opcode);
+        cat_str = strcat(cat_str, dest_op);
+        cat_str = strcat(cat_str,a_r_e);
+
+        free(src_op);
+        free(opcode);
+        free(dest_op);
+        free(a_r_e);
+
+    }
+    else if (action == REG_DEST) {
+        /* _____ _____ __  - 0, dest, 0 */
+        dest_op = truncate_string(va_arg(args, const char*), REGISTER_BINARY_LEN);
+
+        if (!dest_op) {
+            handle_error(ERR_MEM_ALLOC);
+            free(cat_str);
+            return NULL;
+        }
+        memset(cat_str, '0', BINARY_BITS);
+        strncpy(cat_str + REGISTER_BINARY_LEN, dest_op, REGISTER_BINARY_LEN);
+        free(dest_op);
+    }
+    else if (action == REG_SRC) {
+        /* _____ _______  - src, 0 */
+        src_op = truncate_string(va_arg(args, const char*), REGISTER_BINARY_LEN);
+
+        if (!src_op) {
+            handle_error(ERR_MEM_ALLOC);
+            free(cat_str);
+            return NULL;
+        }
+        memset(cat_str, '0', BINARY_BITS);
+        strncpy(cat_str, src_op, REGISTER_BINARY_LEN); /* start from 11 --> 7 */
+        free(src_op);
+    }
+    else if (action == REG_REG) {
+        /* _____ _____ __  - src, dest, 0 */
+        src_op = truncate_string(va_arg(args, const char*), REGISTER_BINARY_LEN);
+        dest_op = truncate_string(va_arg(args, const char*), REGISTER_BINARY_LEN);
+
+        if (!(src_op && dest_op)) {
+            handle_error(ERR_MEM_ALLOC);
+            if(src_op) free(src_op);
+            if(dest_op) free(dest_op);
+
+            free(cat_str);
+            return NULL;
+        }
+        memset(cat_str, '0', BINARY_BITS);
+        strncpy(cat_str, src_op, REGISTER_BINARY_LEN);
+        strncpy(cat_str + REGISTER_BINARY_LEN, dest_op, REGISTER_BINARY_LEN);
+        free(src_op);
+        free(dest_op);
+    }
+    else if (action == ADDRESS) {
+        /* __________ __  - address (src) , a/r/e */
+        src_op = truncate_string(va_arg(args, const char*), ADDRESS_BINARY_LEN);
+        a_r_e = truncate_string(va_arg(args, const char*), A_R_E_BINARY_LEN);
+
+        if (!(src_op && a_r_e)) {
+            handle_error(ERR_MEM_ALLOC);
+            if(src_op) free(src_op);
+            if(a_r_e) free(a_r_e);
+
+            free(cat_str);
+            return NULL;
+        }
+
+        cat_str = strcat(cat_str,src_op);
+        cat_str = strcat(cat_str,a_r_e);
+
+        free(src_op);
+        free(a_r_e);
+    }
+    else {
+        handle_error(TERMINATE, "fconcat_12bits()");
+        free(cat_str);
         return NULL;
     }
 
-    cat_str = strcat(cat_str,tr_src);
-    cat_str = strcat(cat_str,tr_opcode);
-    cat_str = strcat(cat_str, tr_dest);
-    cat_str = strcat(cat_str,tr_are);
-
-    free(tr_src);
-    free(tr_opcode);
-    free(tr_dest);
-    free(tr_are);
-
+    va_end(args);
     cat_str[BINARY_BITS] = '\0';
+
     return cat_str;
 }
 
+/*
 #define MAX_SYMBOL_LENGTH 32
 #define MAX_SYMBOLS 100
 
-//typedef struct {
-//    char name[MAX_SYMBOL_LENGTH];
-//    int value;
-//    DirectiveType type;
-//} Symbol;
-//
-//Symbol symbolTable[MAX_SYMBOLS];
-//int symbolCount = 0;
-//
-//void insertSymbol(const char* name, int value, DirectiveType type) {
-//    strcpy(symbolTable[symbolCount].name, name);
-//    symbolTable[symbolCount].value = value;
-//    symbolTable[symbolCount].type = type;
-//    symbolCount++;
-//}
-//
-//Symbol* findSymbol(const char* name) {
-//    for (int i = 0; i < symbolCount; i++) {
-//        if (strcmp(symbolTable[i].name, name) == 0) {
-//            return &symbolTable[i];
-//        }
-//    }
-//    return NULL;
-//}
-//
-//    char line[MAX_LINE_LENGTH];
-//    int IC = 0; // Instruction Counter
-//    int DC = 0; // Data Counter
-//    int hasSymbolDefinition = 0; // Flag for symbol definition
-//
-//    while (fgets(line, sizeof(line), sourceFile) != NULL) {
-//        // Check if line is empty or a comment
-//        if (line[0] == '\n' || line[0] == ';') {
-//            continue;
-//        }
-//
-//        // Remove newline character at the end
-//        line[strcspn(line, "\n")] = '\0';
-//
-//        // Tokenize the line
-//        char* token = strtok(line, " \t");
-//        if (token == NULL) {
-//            continue; // Empty line
-//        }
-//
-//        // Check if the first field is a symbol
-//        int isSymbol = (strchr(token, ':') != NULL);
-//        if (isSymbol) {
-//            hasSymbolDefinition = 1;
-//            // Process symbol definition, insert into symbol table
-//            char* symbolName = strtok(token, ":");
-//            Symbol* existingSymbol = findSymbol(symbolName);
-//            if (existingSymbol != NULL) {
-//                printf("Error: Symbol '%s' already defined.\n", symbolName);
-//                return 1;
-//            }
-//            insertSymbol(symbolName, (hasSymbolDefinition == DATA) ? DC : IC, hasSymbolDefinition ? DATA : EXTERN);
-//            token = strtok(NULL, " \t"); // Move to next token
-//        }
-//
-//        // Process directives and instructions
-//        if (strcmp(token, "data") == 0) {
-//            // Process data directive
-//            token = strtok(NULL, " \t"); // Move to next token
-//            while (token != NULL) {
-//                // Process data value
-//                int value = atoi(token);
-//                // Update data image and increment DC
-//                // ...
-//                token = strtok(NULL, " \t"); // Move to next token
-//            }
-//        } else if (strcmp(token, "string") == 0) {
-//            // Process string directive
-//            token = strtok(NULL, ""); // Move to next token (remaining line)
-//            // Process string value
-//            // Update data image and increment DC
-//            // ...
-//        } else if (strcmp(token, "entry") == 0) {
-//            // Process entry directive
-//            token = strtok(NULL, " \t"); // Move to next token
-//            while (token != NULL) {
-//                // Process entry symbol
-//                Symbol* entrySymbol = findSymbol(token);
-//                if (entrySymbol != NULL) {
-//                    entrySymbol->type = ENTRY;
-//                } else {
-//                    printf("Error: Entry symbol '%s' not found.\n", token);
-//                    return 1;
-//                }
-//                token = strtok(NULL, " \t"); // Move to next token
-//            }
-//        } else if (strcmp(token, "extern") == 0) {
-//            // Process extern directive
-//            token = strtok(NULL, " \t"); // Move to next token
-//            while (token != NULL) {
-//                // Process extern symbol
-//                Symbol* existingSymbol = findSymbol(token);
-//                if (existingSymbol != NULL) {
-//                    printf("Error: Symbol '%s' already defined.\n", token);
-//                    return 1;
-//                }
-//                insertSymbol(token, 0, EXTERN);
-//                token = strtok(NULL, " \t"); // Move to next token
-//            }
-//        } else {
-//            // Process instruction
-//            // Update symbol table and increment IC accordingly
-//            // Look for operation name in operation table
-//            // Analyze instruction operands and calculate L
-//            // Build binary code of the instruction
-//        }
-//    }
-//
-//    fclose(sourceFile);
-//
-//    // Update data type symbols in the symbol table with final IC value
-//    for (int i = 0; i < symbolCount; i++) {
-//        if (symbolTable[i].type == DATA) {
-//            symbolTable[i].value += IC;
-//        }
-//    }
-//
-//    // Start second pass
-//
-//    return 0;
-//}
+typedef struct {
+    char name[MAX_SYMBOL_LENGTH];
+    int value;
+    DirectiveType type;
+} Symbol;
+
+Symbol symbolTable[MAX_SYMBOLS];
+int symbolCount = 0;
+
+void insertSymbol(const char* name, int value, DirectiveType type) {
+    strcpy(symbolTable[symbolCount].name, name);
+    symbolTable[symbolCount].value = value;
+    symbolTable[symbolCount].type = type;
+    symbolCount++;
+}
+
+Symbol* findSymbol(const char* name) {
+    for (int i = 0; i < symbolCount; i++) {
+        if (strcmp(symbolTable[i].name, name) == 0) {
+            return &symbolTable[i];
+        }
+    }
+    return NULL;
+}
+
+    char line[MAX_LINE_LENGTH];
+    int IC = 0; // Instruction Counter
+    int DC = 0; // Data Counter
+    int hasSymbolDefinition = 0; // Flag for symbol definition
+
+    while (fgets(line, sizeof(line), sourceFile) != NULL) {
+        // Check if line is empty or a comment
+        if (line[0] == '\n' || line[0] == ';') {
+            continue;
+        }
+
+        // Remove newline character at the end
+        line[strcspn(line, "\n")] = '\0';
+
+        // Tokenize the line
+        char* token = strtok(line, " \t");
+        if (token == NULL) {
+            continue; // Empty line
+        }
+
+        // Check if the first field is a symbol
+        int isSymbol = (strchr(token, ':') != NULL);
+        if (isSymbol) {
+            hasSymbolDefinition = 1;
+            // Process symbol definition, insert into symbol table
+            char* symbolName = strtok(token, ":");
+            Symbol* existingSymbol = findSymbol(symbolName);
+            if (existingSymbol != NULL) {
+                printf("Error: Symbol '%s' already defined.\n", symbolName);
+                return 1;
+            }
+            insertSymbol(symbolName, (hasSymbolDefinition == DATA) ? DC : IC, hasSymbolDefinition ? DATA : EXTERN);
+            token = strtok(NULL, " \t"); // Move to next token
+        }
+
+        // Process directives and instructions
+        if (strcmp(token, "data") == 0) {
+            // Process data directive
+            token = strtok(NULL, " \t"); // Move to next token
+            while (token != NULL) {
+                // Process data value
+                int value = atoi(token);
+                // Update data image and increment DC
+                // ...
+                token = strtok(NULL, " \t"); // Move to next token
+            }
+        } else if (strcmp(token, "string") == 0) {
+            // Process string directive
+            token = strtok(NULL, ""); // Move to next token (remaining line)
+            // Process string value
+            // Update data image and increment DC
+            // ...
+        } else if (strcmp(token, "entry") == 0) {
+            // Process entry directive
+            token = strtok(NULL, " \t"); // Move to next token
+            while (token != NULL) {
+                // Process entry symbol
+                Symbol* entrySymbol = findSymbol(token);
+                if (entrySymbol != NULL) {
+                    entrySymbol->type = ENTRY;
+                } else {
+                    printf("Error: Entry symbol '%s' not found.\n", token);
+                    return 1;
+                }
+                token = strtok(NULL, " \t"); // Move to next token
+            }
+        } else if (strcmp(token, "extern") == 0) {
+            // Process extern directive
+            token = strtok(NULL, " \t"); // Move to next token
+            while (token != NULL) {
+                // Process extern symbol
+                Symbol* existingSymbol = findSymbol(token);
+                if (existingSymbol != NULL) {
+                    printf("Error: Symbol '%s' already defined.\n", token);
+                    return 1;
+                }
+                insertSymbol(token, 0, EXTERN);
+                token = strtok(NULL, " \t"); // Move to next token
+            }
+        } else {
+            // Process instruction
+            // Update symbol table and increment IC accordingly
+            // Look for operation name in operation table
+            // Analyze instruction operands and calculate L
+            // Build binary code of the instruction
+        }
+    }
+
+    fclose(sourceFile);
+
+    // Update data type symbols in the symbol table with final IC value
+    for (int i = 0; i < symbolCount; i++) {
+        if (symbolTable[i].type == DATA) {
+            symbolTable[i].value += IC;
+        }
+    }
+
+    // Start second pass
+
+    return 0;
+}
+*/
