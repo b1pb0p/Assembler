@@ -24,7 +24,7 @@ else \
 break;
 /*
  *
-status assembler_first_pass(file_context* file_c);
+
 status assembler_second_pass(file_context* file_c);
 FILE **assembler_generate_output();
 */
