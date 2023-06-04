@@ -33,6 +33,7 @@ const char *msg[MSG_LEN] = {
         "%s - Line too long on line %d. Cannot exceed 80 characters.",
         "%s - Macro too long on line %d. Cannot exceed 31 characters.",
         "%s - Invalid macro name (%s) on line %d.",
+        "%s - Label (%s) does not exist on line %d.",
         "%s - Duplicate macro name on line %d.",
         "%s - Missing opening 'mcro' on line %d.",
         "%s - Missing closing 'endmcro' on line %d.",
@@ -85,6 +86,11 @@ void handle_error(status code, ...) {
         else if (code < OPEN_FILE)
             fprintf(stderr, msg[code], fc->file_name);
         else if (code == ERR_INVAL_MACRO_NAME) {
+            fncall = va_arg(args, char*);
+            num = va_arg(args, int);
+            fprintf(stderr, msg[code], fc->file_name, fncall ,num);
+        }
+        else if (code == ERR_LABEL_DOES_NOT_EXIST) {
             fncall = va_arg(args, char*);
             fprintf(stderr, msg[code], fc->file_name, fncall ,fc->lc);
         }
