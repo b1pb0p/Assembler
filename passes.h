@@ -3,8 +3,10 @@
  * @author Bar Toplian - 323869065- bar.toplian@gmail.com
  */
 
-#ifndef ASSEMBLER_FIRST_PASS_H
-#define ASSEMBLER_FIRST_PASS_H
+#include "utils.h"
+
+#ifndef ASSEMBLER_PASSES_H
+#define ASSEMBLER_PASSES_H
 
 #define BASE64_CHARS 2
 #define A_R_E_BINARY_LEN 2
@@ -23,9 +25,5 @@ typedef enum {
     ADDRESS
 } concat_actions;
 
-char* convert_bin_to_base54(const char* binary);
-char* truncate_string(const char* input, int length);
-char* decimal_to_binary12(int decimal);
-char* concat_12bits(const char* src_op, const char* opcode, const char* dest_op, const char* a_r_e);
-
+status assembler_first_pass(file_context** contexts);
 #endif
