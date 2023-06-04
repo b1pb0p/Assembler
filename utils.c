@@ -206,3 +206,20 @@ void free_file_context(file_context** context) {
         *context = NULL;
     }
 }
+
+/**
+ * Frees the memory occupied by an array of file_context structures.
+ * Calls the free_file_context function to free each individual file_context structure in the array.
+ *
+ * @param contexts The array of file_context pointers to be freed.
+ * @param size The size of the array.
+ */
+void free_file_context_array(file_context** contexts, int size) {
+    int i;
+
+    if (contexts == NULL)
+        return;
+
+    for (i = 0; i < size; i++)
+        if(contexts[i]) free_file_context(&contexts[i]);
+}
