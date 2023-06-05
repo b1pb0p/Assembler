@@ -33,6 +33,13 @@ typedef enum {
 } directive;
 
 typedef enum {
+    DIRECT = 1,
+    INDIRECT = 3,
+    REGISTER = 5,
+    INVALID = -1
+} addressing_modes;
+
+typedef enum {
     MOV,
     CMP,
     ADD,
