@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdarg.h>
+#include <ctype.h>
 #include "data.h"
 #include "passes.h"
 #include "errors.h"
@@ -147,132 +147,156 @@ char* convert_bin_to_base64(const char* binary) {
 }
 
 /**
- * Concatenates the binary representations of components into a 12-bit binary string based on the specified action.
+ * Concatenates the binary representations of components into a 12-bit binary string based on the specified action,
+ * and converts the result to base64.
  *
- * @param action   The action indicating the concatenation type (concat_actions enum).
- * @param ...      Variable arguments depending on the action type.
- *
- * @return A dynamically allocated 12-bit binary string representation of the concatenated components,
- *         or NULL if memory allocation fails or the input strings are truncated incorrectly.
+ * @param data Pointer to the data_image structure.
+ * @return The status of the operation (NO_ERROR or FAILURE).
  */
-char* fconcat_12bits(concat_actions action , ... ) {
-    va_list args;
-    char* src_op;
-    char* opcode;
-    char* dest_op;
-    char* a_r_e;
-    char* cat_str = calloc(BINARY_BITS + 1, sizeof(char));
-
-    if (!cat_str) {
-        printf("error");
-        return NULL;
+status concatenate_and_convert_to_base64(data_image* data) {
+    if (!data) {
+        handle_error(TERMINATE, "concatenate_and_convert_to_base64()");
+        return FAILURE;
     }
-    va_start(args, action);
 
-    if (action == DEFAULT_12BIT) {
+    if (data->missing_info)
+        return NO_ERROR; /* To not trigger and false alarm, will be handled in second pass */
+
+    if (data->concat == DEFAULT_12BIT) {
         /* ___ ____ ___ __  - src, opcode, dest, a/r/e */
-        src_op = truncate_string(va_arg(args, const char*), SRC_DEST_OP_BINARY_LEN);
-        opcode = truncate_string(va_arg(args, const char*), OPCODE_BINARY_LEN);
-        dest_op = truncate_string(va_arg(args, const char*), SRC_DEST_OP_BINARY_LEN);
-        a_r_e = truncate_string(va_arg(args, const char*), A_R_E_BINARY_LEN);
-
-        if (!(src_op && opcode && dest_op && a_r_e)) {
-            free(cat_str);
-            if (src_op) free(src_op);
-            if (opcode) free(opcode);
-            if (dest_op) free(dest_op);
-            if (a_r_e) free(a_r_e);
-
-            handle_error(ERR_MEM_ALLOC);
-            return NULL;
+        if (!(data->binary_src && data->binary_opcode && data->binary_dest && data->binary_a_r_e)) {
+            handle_error(TERMINATE, "concatenate_and_convert_to_base64() (Insufficient binary data)");
+            return FAILURE;
         }
 
-        cat_str = strcat(cat_str,src_op);
-        cat_str = strcat(cat_str,opcode);
-        cat_str = strcat(cat_str, dest_op);
-        cat_str = strcat(cat_str,a_r_e);
-
-        free(src_op);
-        free(opcode);
-        free(dest_op);
-        free(a_r_e);
-
+        strcpy(data->binary_word, data->binary_src);
+        strcat(data->binary_word, data->binary_opcode);
+        strcat(data->binary_word, data->binary_dest);
+        strcat(data->binary_word, data->binary_a_r_e);
     }
-    else if (action == REG_DEST) {
+    else if (data->concat == REG_DEST) {
         /* _____ _____ __  - 0, dest, 0 */
-        dest_op = truncate_string(va_arg(args, const char*), REGISTER_BINARY_LEN);
-
-        if (!dest_op) {
-            handle_error(ERR_MEM_ALLOC);
-            free(cat_str);
-            return NULL;
+        if (!data->binary_dest) {
+            handle_error(TERMINATE, "concatenate_and_convert_to_base64() (Insufficient binary data)");
+            return FAILURE;
         }
-        memset(cat_str, '0', BINARY_BITS);
-        strncpy(cat_str + REGISTER_BINARY_LEN, dest_op, REGISTER_BINARY_LEN);
-        free(dest_op);
+
+        memset(data->binary_word, '0', BINARY_BITS);
+        strncpy(data->binary_word + REGISTER_BINARY_LEN, data->binary_dest, REGISTER_BINARY_LEN);
     }
-    else if (action == REG_SRC) {
+    else if (data->concat == REG_SRC) {
         /* _____ _______  - src, 0 */
-        src_op = truncate_string(va_arg(args, const char*), REGISTER_BINARY_LEN);
-
-        if (!src_op) {
-            handle_error(ERR_MEM_ALLOC);
-            free(cat_str);
-            return NULL;
+        if (!data->binary_src) {
+            handle_error(TERMINATE, "concatenate_and_convert_to_base64() (Insufficient binary data)");
+            return FAILURE;
         }
-        memset(cat_str, '0', BINARY_BITS);
-        strncpy(cat_str, src_op, REGISTER_BINARY_LEN); /* start from 11 --> 7 */
-        free(src_op);
+
+        memset(data->binary_word, '0', BINARY_BITS);
+        strncpy(data->binary_word, data->binary_src, REGISTER_BINARY_LEN); /* start from 11 --> 7 */
     }
-    else if (action == REG_REG) {
+    else if (data->concat == REG_REG) {
         /* _____ _____ __  - src, dest, 0 */
-        src_op = truncate_string(va_arg(args, const char*), REGISTER_BINARY_LEN);
-        dest_op = truncate_string(va_arg(args, const char*), REGISTER_BINARY_LEN);
-
-        if (!(src_op && dest_op)) {
-            handle_error(ERR_MEM_ALLOC);
-            if(src_op) free(src_op);
-            if(dest_op) free(dest_op);
-
-            free(cat_str);
-            return NULL;
+        if (!(data->binary_src && data->binary_dest)) {
+            handle_error(TERMINATE, "concatenate_and_convert_to_base64() (Insufficient binary data)");
+            return FAILURE;
         }
-        memset(cat_str, '0', BINARY_BITS);
-        strncpy(cat_str, src_op, REGISTER_BINARY_LEN);
-        strncpy(cat_str + REGISTER_BINARY_LEN, dest_op, REGISTER_BINARY_LEN);
-        free(src_op);
-        free(dest_op);
+
+        memset(data->binary_word, '0', BINARY_BITS);
+        strncpy(data->binary_word, data->binary_src, REGISTER_BINARY_LEN);
+        strncpy(data->binary_word + REGISTER_BINARY_LEN, data->binary_dest, REGISTER_BINARY_LEN);
     }
-    else if (action == ADDRESS) {
-        /* __________ __  - address (src) , a/r/e */
-        src_op = truncate_string(va_arg(args, const char*), ADDRESS_BINARY_LEN);
-        a_r_e = truncate_string(va_arg(args, const char*), A_R_E_BINARY_LEN);
-
-        if (!(src_op && a_r_e)) {
-            handle_error(ERR_MEM_ALLOC);
-            if(src_op) free(src_op);
-            if(a_r_e) free(a_r_e);
-
-            free(cat_str);
-            return NULL;
+    else if (data->concat == ADDRESS) {
+        /* __________ __  - address (src), a/r/e */
+        if (!(data->binary_src && data->binary_a_r_e)) {
+            handle_error(TERMINATE, "concatenate_and_convert_to_base64() (Insufficient binary data)");
+            return FAILURE;
         }
 
-        cat_str = strcat(cat_str,src_op);
-        cat_str = strcat(cat_str,a_r_e);
-
-        free(src_op);
-        free(a_r_e);
+        strcpy(data->binary_word, data->binary_src);
+        strcat(data->binary_word, data->binary_a_r_e);
     }
     else {
-        handle_error(TERMINATE, "fconcat_12bits()");
-        free(cat_str);
-        return NULL;
+        handle_error(TERMINATE, "concatenate_and_convert_to_base64() (Invalid concat action)");
+        return FAILURE;
     }
 
-    va_end(args);
-    cat_str[BINARY_BITS] = '\0';
+    /* Convert binary to base64 */
+    data->base64_word = convert_bin_to_base64(data->binary_word);
+    if (!data->base64_word)
+        return FAILURE; /* Error message printed via convert_bin_to_base64() */
 
-    return cat_str;
+    return NO_ERROR;
+}
+
+/**
+ * Determines the addressing mode based on the input source string.
+ *
+ * @param src The input source string to analyze.
+ * @return The addressing mode determined based on the source string.
+ *         Possible return values are:
+ *         - REGISTER: If the source string starts with '@'.
+ *         - DIRECT: If the source string starts with a digit.
+ *         - INDIRECT: If the source string starts with an alphabetic character.
+ *         - INVALID: If the source string does not match any addressing mode.
+ */
+addressing_modes get_addressing_mode(const char *src) {
+    if (*src == REGISTER_CH)
+        return REGISTER;
+
+    if (*src == '+' || *src == '-')
+        src++;
+
+    if (isdigit(*src))
+        return DIRECT;
+
+    if (isalpha(*src))
+        return INDIRECT;
+
+    handle_error(TERMINATE, "get_addressing_mode()");
+    return INVALID;
+}
+
+/**
+ * Checks if the combination of command and addressing modes is legal.
+ *
+ * @param cmd  The command to check.
+ * @param src  The addressing mode of the source operand.
+ * @param dest The addressing mode of the destination operand.
+ * @return The status of the operation (NO_ERROR or FAILURE).
+ */
+status is_legal_addressing(command cmd, addressing_modes src, addressing_modes dest) {
+    status error_flag = NO_ERROR;
+
+    if (cmd <= SUB || cmd == LEA) {
+        if (src == INVALID) {
+            printf("error invalid addressing mode of src");
+            error_flag = FAILURE;
+        }
+
+        if ((cmd == MOV && dest == INVALID) || (!(dest == INDIRECT || dest == REGISTER))) {
+            printf("error invalid addressing mode of dest");
+            error_flag = FAILURE;
+        }
+    }
+    else if (cmd >= RTS) {
+        if (src != INVALID || dest != INVALID) {
+            printf("error this command doesn't take any parameters");
+            error_flag = FAILURE;
+        }
+    }
+    else if (cmd == PRN) {
+        if (src != INVALID) {
+            printf("error invalid addressing mode of src");
+            error_flag = FAILURE;
+        }
+
+        if (dest == INVALID) {
+            printf("error invalid addressing mode of dest");
+            error_flag = FAILURE;
+        }
+    }
+
+    return error_flag;
 }
 
 /**
@@ -314,6 +338,25 @@ void free_data_image(data_image** data) {
     if ((*data)->symbol_t) free_symbol(&((*data)->symbol_t));
     free(*data);
     *data = NULL;
+}
+
+/**
+ * Frees the memory allocated for an array of data_image structures, including their members and the array itself.
+ *
+ * @param data_array Pointer to the array of data_image structures to be freed.
+ * @param size       Size of the data_array.
+ */
+void free_data_image_array(data_image*** data_array, int size) {
+    int i;
+
+    if (!data_array || !*data_array) return;
+
+    for (i = 0; i < size; i++) {
+        free_data_image(&((*data_array)[i]));
+    }
+
+    free(*data_array);
+    *data_array = NULL;
 }
 
 
