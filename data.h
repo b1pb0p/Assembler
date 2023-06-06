@@ -10,11 +10,10 @@
 #define REGISTER_CH '@'
 
 typedef struct {
-    char *name;
-    char *address;
-    char **values; /* can be multiple (comma seperated/ strings) or singular */
-
-    directive type; /* TODO: check if necessary */
+    char *label;
+    char *address_binary;
+    int address_decimal;
+    int is_defined;
 } symbol;
 
 typedef struct {
@@ -22,9 +21,9 @@ typedef struct {
     char* binary_opcode;
     char* binary_dest;
     char* binary_a_r_e;
-    char* binary_word;
     char* base64_word;
 
+    directive type; /* TODO: check if necessary */
     concat_actions concat;
     symbol *symbol_t;
 
@@ -41,6 +40,7 @@ char* decimal_to_binary12(int decimal);
 void free_symbol(symbol** symbol_t);
 void free_data_image(data_image** data);
 void free_data_image_array(data_image*** data_array, int size);
+void free_strings(int num_strings, ...);
 
 status concatenate_and_convert_to_base64(data_image* data);
 status is_legal_addressing(command cmd, addressing_modes src, addressing_modes dest);

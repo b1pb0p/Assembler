@@ -136,8 +136,12 @@ status copy_string(char** target, const char* source) {
         handle_error(ERR_MEM_ALLOC);
         return ERR_MEM_ALLOC;
     }
+
     strcpy(temp, source);
+    temp[strlen(source)] = '\0';
+    if (!*target) free(*target);
     *target = temp;
+
     return NO_ERROR;
 }
 

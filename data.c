@@ -6,12 +6,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 #include <ctype.h>
 #include "data.h"
 #include "passes.h"
 #include "errors.h"
 #include "utils.h"
 
+/* "Private helper functions */
+status concat_default_12bit(data_image* data, char** binary_word);
+status concat_reg_dest(data_image* data, char** binary_word);
+status concat_reg_src(data_image* data, char** binary_word);
+status concat_reg_reg(data_image* data, char** binary_word);
+status concat_address(data_image* data, char** binary_word);
 
 /**
  * Converts a decimal number to a binary string representation.
@@ -147,85 +154,197 @@ char* convert_bin_to_base64(const char* binary) {
 }
 
 /**
- * Concatenates the binary representations of components into a 12-bit binary string based on the specified action,
- * and converts the result to base64.
+ * Creates the base64 word for a data_image structure by concatenating the binary components
+ * and converting the binary word to base64 format.
  *
- * @param data Pointer to the data_image structure.
- * @return The status of the operation (NO_ERROR or FAILURE).
+ * @param data The data_image structure containing the binary components.
+ * @return The status of the base64 word creation. Returns NO_ERROR if successful, or FAILURE if an error occurs.
  */
-status concatenate_and_convert_to_base64(data_image* data) {
+status creat_base64_word(data_image* data) {
+    status report = NO_ERROR;
+    char* binary_word = malloc((BINARY_BITS + 1) * sizeof(char));
+
+    if (!binary_word) {
+        handle_error(ERR_MEM_ALLOC);
+        return FAILURE;
+    }
+
     if (!data) {
-        handle_error(TERMINATE, "concatenate_and_convert_to_base64()");
+        handle_error(TERMINATE, "creat_base64_word()");
+        free(binary_word);
         return FAILURE;
     }
 
     if (data->missing_info)
-        return NO_ERROR; /* To not trigger and false alarm, will be handled in second pass */
+        return NO_ERROR; /* TODO: check ; To not trigger any false alarm, will be handled in the second pass */
 
-    if (data->concat == DEFAULT_12BIT) {
-        /* ___ ____ ___ __  - src, opcode, dest, a/r/e */
-        if (!(data->binary_src && data->binary_opcode && data->binary_dest && data->binary_a_r_e)) {
-            handle_error(TERMINATE, "concatenate_and_convert_to_base64() (Insufficient binary data)");
-            return FAILURE;
-        }
-
-        strcpy(data->binary_word, data->binary_src);
-        strcat(data->binary_word, data->binary_opcode);
-        strcat(data->binary_word, data->binary_dest);
-        strcat(data->binary_word, data->binary_a_r_e);
-    }
-    else if (data->concat == REG_DEST) {
-        /* _____ _____ __  - 0, dest, 0 */
-        if (!data->binary_dest) {
-            handle_error(TERMINATE, "concatenate_and_convert_to_base64() (Insufficient binary data)");
-            return FAILURE;
-        }
-
-        memset(data->binary_word, '0', BINARY_BITS);
-        strncpy(data->binary_word + REGISTER_BINARY_LEN, data->binary_dest, REGISTER_BINARY_LEN);
-    }
-    else if (data->concat == REG_SRC) {
-        /* _____ _______  - src, 0 */
-        if (!data->binary_src) {
-            handle_error(TERMINATE, "concatenate_and_convert_to_base64() (Insufficient binary data)");
-            return FAILURE;
-        }
-
-        memset(data->binary_word, '0', BINARY_BITS);
-        strncpy(data->binary_word, data->binary_src, REGISTER_BINARY_LEN); /* start from 11 --> 7 */
-    }
-    else if (data->concat == REG_REG) {
-        /* _____ _____ __  - src, dest, 0 */
-        if (!(data->binary_src && data->binary_dest)) {
-            handle_error(TERMINATE, "concatenate_and_convert_to_base64() (Insufficient binary data)");
-            return FAILURE;
-        }
-
-        memset(data->binary_word, '0', BINARY_BITS);
-        strncpy(data->binary_word, data->binary_src, REGISTER_BINARY_LEN);
-        strncpy(data->binary_word + REGISTER_BINARY_LEN, data->binary_dest, REGISTER_BINARY_LEN);
-    }
-    else if (data->concat == ADDRESS) {
-        /* __________ __  - address (src), a/r/e */
-        if (!(data->binary_src && data->binary_a_r_e)) {
-            handle_error(TERMINATE, "concatenate_and_convert_to_base64() (Insufficient binary data)");
-            return FAILURE;
-        }
-
-        strcpy(data->binary_word, data->binary_src);
-        strcat(data->binary_word, data->binary_a_r_e);
-    }
-    else {
+    if (data->concat == DEFAULT_12BIT)
+        report = concat_default_12bit(data, &binary_word);
+    else if (data->concat == REG_DEST)
+        report = concat_reg_dest(data, &binary_word);
+    else if (data->concat == REG_SRC)
+        report = concat_reg_src(data, &binary_word);
+    else if (data->concat == REG_REG)
+        report = concat_reg_reg(data, &binary_word);
+    else if (data->concat == ADDRESS)
+        report = concat_address(data, &binary_word);
+    else
         handle_error(TERMINATE, "concatenate_and_convert_to_base64() (Invalid concat action)");
-        return FAILURE;
+
+    if (report != FAILURE) {
+        /* Convert binary to base64 */
+        data->base64_word = convert_bin_to_base64(binary_word);
+        if (!data->base64_word)
+            report = FAILURE; /* Error message printed via convert_bin_to_base64() */
     }
 
-    /* Convert binary to base64 */
-    data->base64_word = convert_bin_to_base64(data->binary_word);
-    if (!data->base64_word)
-        return FAILURE; /* Error message printed via convert_bin_to_base64() */
+    free(binary_word);
+    return report;
+}
 
-    return NO_ERROR;
+/**
+ * Concatenates the binary components of a data_image structure according to the DEFAULT_12BIT concatenation.
+ *
+ * @param data The data_image structure containing the binary components.
+ * @param binary_word A pointer to a char array where the concatenated binary word will be stored.
+ * @return The status of the concatenation operation. Returns NO_ERROR if successful, or FAILURE if an error occurs.
+ */
+status concat_default_12bit(data_image* data, char** binary_word) {
+    char *src_op, *opcode, *dest_op, *a_r_e;
+    status report = NO_ERROR;
+
+    src_op = truncate_string(data->binary_src, SRC_DEST_OP_BINARY_LEN);
+    opcode = truncate_string(data->binary_opcode, OPCODE_BINARY_LEN);
+    dest_op = truncate_string(data->binary_dest, SRC_DEST_OP_BINARY_LEN);
+    a_r_e = truncate_string(data->binary_a_r_e, A_R_E_BINARY_LEN);
+
+    if (!(src_op && opcode && dest_op && a_r_e)) {
+        handle_error(TERMINATE, "concat_default_12bit()");
+        report = FAILURE;
+    }
+
+    if (report != FAILURE) {
+        strcpy(*binary_word, src_op);
+        strcat(*binary_word, opcode);
+        strcat(*binary_word, dest_op);
+        strcat(*binary_word, a_r_e);
+    }
+
+    free_strings(AMT_WORD_4, &src_op, &opcode, &dest_op, &a_r_e);
+    return report;
+}
+
+/**
+ * Concatenates the binary components of a data_image structure according to the REG_DEST concatenation.
+ *
+ * @param data The data_image structure containing the binary components.
+ * @param binary_word A pointer to a char pointer where the concatenated binary word will be stored.
+ * @return The status of the concatenation operation. Returns NO_ERROR if successful, or FAILURE if an error occurs.
+ */
+status concat_reg_dest(data_image* data, char** binary_word) {
+    char *dest_op;
+    status report = NO_ERROR;
+
+    dest_op = truncate_string(data->binary_dest, SRC_DEST_OP_BINARY_LEN);
+
+    if (!dest_op) {
+        handle_error(TERMINATE, "concat_reg_dest()");
+        report = FAILURE;
+    }
+
+    if (report != FAILURE) {
+        memset(*binary_word, '0', BINARY_BITS);
+        strncpy(*binary_word + REGISTER_BINARY_LEN, dest_op, REGISTER_BINARY_LEN);
+    }
+
+    free_strings(AMT_WORD_1, &dest_op);
+    return report;
+}
+
+/**
+ * Concatenates the binary components of a data_image structure according to the REG_SRC concatenation.
+ *
+ * @param data The data_image structure containing the binary components.
+ * @param binary_word A pointer to a char pointer where the concatenated binary word will be stored.
+ * @return The status of the concatenation operation. Returns NO_ERROR if successful, or FAILURE if an error occurs.
+ */
+status concat_reg_src(data_image* data, char** binary_word) {
+    char *src_op;
+    status report = NO_ERROR;
+
+    src_op = truncate_string(data->binary_src, REGISTER_BINARY_LEN);
+
+    if (!src_op) {
+        handle_error(TERMINATE, "concat_reg_src()");
+        report = FAILURE;
+    }
+
+    if (report != FAILURE) {
+        memset(*binary_word, '0', BINARY_BITS);
+        strncpy(*binary_word, src_op, REGISTER_BINARY_LEN); /* start from 11 --> 7 */
+    }
+
+    free_strings(AMT_WORD_1, &src_op);
+    return report;
+}
+
+/**
+ * Concatenates the binary components of a data_image structure according to the REG_REG concatenation.
+ *
+ * @param data The data_image structure containing the binary components.
+ * @param binary_word A pointer to a pointer to a char array where the concatenated binary word will be stored.
+ *                    The function will allocate memory for the binary word and update the pointer accordingly.
+ * @return The status of the concatenation operation. Returns NO_ERROR if successful, or FAILURE if an error occurs.
+ */
+status concat_reg_reg(data_image* data, char** binary_word) {
+    char *src_op, *dest_op;
+    status report = NO_ERROR;
+
+    src_op = truncate_string(data->binary_src, REGISTER_BINARY_LEN);
+    dest_op = truncate_string(data->binary_dest, REGISTER_BINARY_LEN);
+
+    if (!(src_op && dest_op)) {
+        handle_error(TERMINATE, "concat_reg_reg()");
+        report = FAILURE;
+    }
+
+    if (report != FAILURE) {
+        memset(*binary_word, '0', BINARY_BITS);
+        strncpy(*binary_word, src_op, REGISTER_BINARY_LEN);
+        strncpy(*binary_word + REGISTER_BINARY_LEN, dest_op, REGISTER_BINARY_LEN);
+    }
+
+    free_strings(AMT_WORD_2, &src_op, &dest_op);
+    return report;
+}
+
+/**
+ * Concatenates the binary components of a data_image structure according to the ADDRESS concatenation.
+ *
+ * @param data The data_image structure containing the binary components.
+ * @param binary_word A pointer to a pointer to a char array where the concatenated binary word will be stored.
+ *                    The function will allocate memory for the binary word and update the pointer accordingly.
+ * @return The status of the concatenation operation. Returns NO_ERROR if successful, or FAILURE if an error occurs.
+ */
+status concat_address(data_image* data, char** binary_word) {
+    char *src_op, *a_r_e;
+    status report = NO_ERROR;
+
+    src_op = truncate_string(data->binary_src, ADDRESS_BINARY_LEN);
+    a_r_e = truncate_string(data->binary_a_r_e, A_R_E_BINARY_LEN);
+
+    if (!(src_op && a_r_e)) {
+        handle_error(TERMINATE, "concat_address()");
+        report = FAILURE;
+    }
+
+    if (report != FAILURE) {
+        strcpy(*binary_word, src_op);
+        strcat(*binary_word, a_r_e);
+    }
+
+    free_strings(AMT_WORD_2, &src_op, &a_r_e);
+    return report;
 }
 
 /**
@@ -306,19 +425,19 @@ status is_legal_addressing(command cmd, addressing_modes src, addressing_modes d
  *                 The pointer will be set to NULL after freeing the memory.
  */
 void free_symbol(symbol** symbol_t) {
-    int i;
-    if (!symbol_t) return;
+    if (!symbol_t || !(*symbol_t)) return;
 
-    if ((*symbol_t)->name) free((*symbol_t)->name);
-    if ((*symbol_t)->address) free((*symbol_t)->address);
-
-    if ((*symbol_t)->values != NULL) {
-        for (i = 0; (*symbol_t)->values[i] != NULL; i++)
-            free((*symbol_t)->values[i]);
-        free((*symbol_t)->values);
+    if ((*symbol_t)->label) {
+        free((*symbol_t)->label);
+        (*symbol_t)->label = NULL;
     }
 
-    free((*symbol_t));
+    if ((*symbol_t)->address_binary) {
+        free((*symbol_t)->address_binary);
+        (*symbol_t)->address_binary = NULL;
+    }
+
+    free(*symbol_t);
     *symbol_t = NULL;
 }
 
@@ -333,7 +452,6 @@ void free_data_image(data_image** data) {
     if ((*data)->binary_opcode) free((*data)->binary_opcode);
     if ((*data)->binary_dest) free((*data)->binary_dest);
     if ((*data)->binary_a_r_e) free((*data)->binary_a_r_e);
-    if ((*data)->binary_word) free((*data)->binary_word);
     if ((*data)->base64_word) free((*data)->base64_word);
     if ((*data)->symbol_t) free_symbol(&((*data)->symbol_t));
     free(*data);
@@ -359,4 +477,29 @@ void free_data_image_array(data_image*** data_array, int size) {
     *data_array = NULL;
 }
 
+/**
+ * Frees dynamically allocated memory for a given number of strings.
+ *
+ * @param num_strings The number of strings to free.
+ * @param ...         Pointers to the strings to be freed.
+ *                    Note: The pointers should be of type char**.
+ *
+ * Usage: free_strings(num_strings, &str1, &str2, &str3, ...);
+ */
+void free_strings(int num_strings, ...) {
+    char** str_ptr;
+    int i;
+    va_list args;
+    va_start(args, num_strings);
+
+    for (i = 0; i < num_strings; ++i) {
+        str_ptr = va_arg(args, char**);
+        if (*str_ptr) {
+            free(*str_ptr);
+            *str_ptr = NULL;
+        }
+    }
+
+    va_end(args);
+}
 

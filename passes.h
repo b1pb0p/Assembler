@@ -16,6 +16,9 @@
 #define REGISTER_BINARY_LEN 5
 #define ADDRESS_BINARY_LEN 10
 #define BINARY_BITS 12
+#define AMT_WORD_4 4
+#define AMT_WORD_2 2
+#define AMT_WORD_1 1
 
 typedef enum {
     DEFAULT_12BIT,

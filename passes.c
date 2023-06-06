@@ -4,6 +4,8 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include "utils.h"
 #include "errors.h"
 #include "data.h"
@@ -44,11 +46,11 @@ status assembler_second_pass(file_context** contexts) {
 
     for (i = 0; i < data_img_size; i++) {
         if (data_img[i].missing_info) {
-            if (!data_img[i].symbol_t->address) {
+            if (!data_img[i].symbol_t->address_decimal) {
                 handle_error(ERR_LABEL_DOES_NOT_EXIST, src, data_img->lc);
                 FREE_AND_RETURN_FAILURE;
             }
-            data_img[i].base64_word = convert_bin_to_base64(data_img->symbol_t->address);
+            data_img[i].base64_word = convert_bin_to_base64(data_img->symbol_t->address_binary);
             if (!data_img[i].base64_word) FREE_AND_RETURN_FAILURE;
         }
         if (!data_img[i].base64_word) FREE_AND_RETURN_FAILURE;
@@ -59,6 +61,46 @@ status assembler_second_pass(file_context** contexts) {
     free_data_image(&data_img);
     free_file_context_array(contexts, INPUT_OUTPUT_NUM_FILES); /* TODO: free ** at main */
     return NO_ERROR;
+}
+
+/**
+ * Creates a new symbol structure with the specified label and address_decimal,
+ * And add it to a global symbol_table.
+ *
+ * @param label   The label for the symbol.
+ * @param address The address_decimal associated with the symbol.
+ * @return A pointer to the newly created symbol structure, or NULL if memory allocation fails.
+ */
+symbol* create_symbol(const char* label, int address) {
+    symbol* new_symbol = malloc(sizeof(symbol));
+    if (!new_symbol) {
+        handle_error(ERR_MEM_ALLOC);
+        return NULL;
+    }
+
+    if (copy_string(&(new_symbol->label), label) != NO_ERROR) {
+        free(new_symbol);
+        return NULL;
+    }
+
+    new_symbol->address_decimal = address;
+    new_symbol->address_binary
+    new_symbol->is_defined = 0;
+
+    // Resize the symbol table array
+    symbol** new_symbol_table = realloc(symbol_table, (symbol_count + 1) * sizeof(symbol*));
+    if (!new_symbol_table) {
+        handle_error(ERR_MEM_ALLOC);
+        free(new_symbol->label);
+        free(new_symbol);
+        return NULL;
+    }
+
+    symbol_table = new_symbol_table;
+    symbol_table[symbol_count] = new_symbol;
+    symbol_count++;
+
+    return new_symbol;
 }
 
 /*
