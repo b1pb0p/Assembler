@@ -5,7 +5,6 @@
 
 #ifndef ASSEMBLER_DATA_H
 #define ASSEMBLER_DATA_H
-#include "passes.h"
 
 #define REGISTER_CH '@'
 
@@ -13,8 +12,10 @@ typedef struct {
     char *label;
     char *address_binary;
     int address_decimal;
-    int is_defined;
+    int is_missing_info;
 } symbol;
+
+#include "passes.h"
 
 typedef struct {
     char* binary_src;
@@ -42,8 +43,8 @@ void free_data_image(data_image** data);
 void free_data_image_array(data_image*** data_array, int size);
 void free_strings(int num_strings, ...);
 
-status concatenate_and_convert_to_base64(data_image* data);
+status creat_base64_word(data_image* data);
 status is_legal_addressing(command cmd, addressing_modes src, addressing_modes dest);
 addressing_modes get_addressing_mode(const char *src);
 
-#endif //ASSEMBLER_DATA_H
+#endif

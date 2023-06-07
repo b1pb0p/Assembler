@@ -7,6 +7,7 @@
 #include "errors.h"
 #include "utils.h"
 #include "preprocessor.h"
+#include "passes.h"
 #include "assembler.h"
 
 #define HANDLE_STATUS(file, code) if ((code) == ERR_MEM_ALLOC) { \

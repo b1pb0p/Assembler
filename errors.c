@@ -24,7 +24,7 @@ const char *msg[MSG_LEN] = {
         "%s - Illegal use of operand on line %d.",
         "%s - Label used before definition on line %d.",
         "%s - Missing label on line %d.",
-        "%s - Duplicate label on line %d.",
+        "%s - Duplicate label declaration on line %d.",
         "%s - Invalid register used on line %d.",
         "%s - Extraneous text on line %d.",
         "%s - Missing '@' symbol on line %d.",

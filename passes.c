@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "passes.h"
 #include "utils.h"
 #include "errors.h"
 #include "data.h"
@@ -16,9 +17,9 @@ return FAILURE; \
 };
 
 
-symbol *symbol_table = NULL;
+symbol **symbol_table = NULL;
 data_image *data_img = NULL;
-size_t symbol_size = 0;
+size_t symbol_count = 0;
 size_t data_img_size = 0;
 
 status assembler_first_pass(file_context** contexts) {
@@ -40,7 +41,7 @@ status assembler_second_pass(file_context** contexts) {
     int i;
 
     if (!src || !out_obj)
-        FREE_AND_RETURN_FAILURE;
+    FREE_AND_RETURN_FAILURE;
 
     fprintf(out_obj->file_ptr, "%d %d\n", src->ic, src->dc);
 
@@ -64,69 +65,109 @@ status assembler_second_pass(file_context** contexts) {
 }
 
 /**
- * Creates a new symbol structure with the specified label and address_decimal,
- * And add it to a global symbol_table.
+ * Add a symbol to the symbol table.
+ * If the symbol already exists and has missing information, its information is updated with the provided address.
+ * If the symbol already exists and has complete information, NULL is returned.
+ * If the symbol is new, it is added to the symbol table with the provided label and address.
  *
- * @param label   The label for the symbol.
- * @param address The address_decimal associated with the symbol.
- * @return A pointer to the newly created symbol structure, or NULL if memory allocation fails.
+ * @param label The label of the symbol to add.
+ * @param address The address of the symbol.
+ * @return A pointer to the added symbol if it is new or has missing information, or NULL if the symbol already exists with complete information.
+ *         Returns NULL in case of memory allocation errors during symbol creation or table expansion.
  */
-symbol* create_symbol(const char* label, int address) {
-    symbol* new_symbol = malloc(sizeof(symbol));
-    if (!new_symbol) {
-        handle_error(ERR_MEM_ALLOC);
-        return NULL;
+symbol* add_symbol(file_context *src, const char* label, int address) {
+    symbol** new_symbol_table = NULL;
+    symbol* new_symbol = NULL;
+    symbol* existing_symbol = find_symbol(label);
+
+    if (existing_symbol) {
+        if (existing_symbol->is_missing_info && address != INVALID_ADDRESS)
+            update_symbol_info(existing_symbol, address);
+        else {
+            handle_error(ERR_DUP_LABEL, src);
+            return NULL;
+        }
+    } else {
+        new_symbol_table = realloc(symbol_table, (symbol_count + 1) * sizeof(symbol*));
+        new_symbol = malloc(sizeof(symbol));
+
+        if (!new_symbol_table || !new_symbol || copy_string(&(new_symbol->label), label) != NO_ERROR)    {
+            handle_error(ERR_MEM_ALLOC);
+            free_symbol(&new_symbol);
+            free_symbol_table();
+            return NULL;
+        }
+        if (address == INVALID_ADDRESS)
+            new_symbol->is_missing_info = 1;
+        else {
+            new_symbol->address_decimal = address;
+            new_symbol->address_binary = decimal_to_binary12(address);
+            new_symbol->is_missing_info = 0;
+        }
+
+        symbol_table = new_symbol_table;
+        symbol_table[symbol_count++] = new_symbol;
+
+        return new_symbol;
     }
 
-    if (copy_string(&(new_symbol->label), label) != NO_ERROR) {
-        free(new_symbol);
-        return NULL;
-    }
+    return existing_symbol;
+}
 
-    new_symbol->address_decimal = address;
-    new_symbol->address_binary
-    new_symbol->is_defined = 0;
+/**
+ * Find a symbol in the symbol table based on its label.
+ *
+ * @param label The label to search for in the symbol table.
+ * @return A pointer to the symbol if found, or NULL if the label is not found.
+ */
+symbol* find_symbol(const char* label) {
+    size_t i;
+    for (i = 0; i < symbol_count; ++i)
+        if (symbol_table[i] && strcmp(symbol_table[i]->label, label) == 0)
+            return symbol_table[i];
+    return NULL;
+}
 
-    // Resize the symbol table array
-    symbol** new_symbol_table = realloc(symbol_table, (symbol_count + 1) * sizeof(symbol*));
-    if (!new_symbol_table) {
-        handle_error(ERR_MEM_ALLOC);
-        free(new_symbol->label);
-        free(new_symbol);
-        return NULL;
-    }
+/**
+ * Updates the information of an existing symbol with a new address.
+ *
+ * @param existing_symbol The existing symbol to update.
+ * @param address The new address to assign to the symbol.
+ * @return The status of the update operation.
+ *         Returns NO_ERROR if the update was successful,
+ *         or FAILURE if the conversion to binary failed.
+ */
+status update_symbol_info(symbol* existing_symbol, int address) {
+    existing_symbol->address_decimal = address;
+    existing_symbol->address_binary = decimal_to_binary12(address);
 
-    symbol_table = new_symbol_table;
-    symbol_table[symbol_count] = new_symbol;
-    symbol_count++;
+    if (!existing_symbol->address_binary)
+        return FAILURE;
 
-    return new_symbol;
+    existing_symbol->is_missing_info = 0;
+    return NO_ERROR;
+}
+
+/**
+ * Frees the memory allocated for the symbol table, including all symbols and their members.
+ */
+void free_symbol_table() {
+    size_t i;
+
+    if (!symbol_table)
+        return;
+
+    for (i = 0; i < symbol_count; ++i)
+        if (symbol_table[i])
+            free_symbol(&symbol_table[i]);
+
+    free(symbol_table);
+    symbol_table = NULL;
+    symbol_count = 0;
 }
 
 /*
-#define MAX_SYMBOL_LENGTH 32
-#define MAX_SYMBOLS 100
 
-
-
-Symbol symbolTable[MAX_SYMBOLS];
-int symbolCount = 0;
-
-void insertSymbol(const char* name, int value, DirectiveType type) {
-    strcpy(symbolTable[symbolCount].name, name);
-    symbolTable[symbolCount].value = value;
-    symbolTable[symbolCount].type = type;
-    symbolCount++;
-}
-
-Symbol* findSymbol(const char* name) {
-    for (int i = 0; i < symbolCount; i++) {
-        if (strcmp(symbolTable[i].name, name) == 0) {
-            return &symbolTable[i];
-        }
-    }
-    return NULL;
-}
 
     char line[MAX_LINE_LENGTH];
     int IC = 0; // Instruction Counter

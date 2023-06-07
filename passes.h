@@ -1,13 +1,15 @@
-/* first_pass.h
- * Assembler's first pass process.
+/* passes.h
+ * Assembler's first and second pass processes.
  * @author Bar Toplian - 323869065- bar.toplian@gmail.com
  */
 
 #include "utils.h"
+#include "data.h"
 
 #ifndef ASSEMBLER_PASSES_H
 #define ASSEMBLER_PASSES_H
 
+#define INVALID_ADDRESS -1
 #define BASE64_CHARS 2
 #define A_R_E_BINARY_LEN 2
 #define SRC_DEST_OP_BINARY_LEN 3
@@ -29,4 +31,11 @@ typedef enum {
 } concat_actions;
 
 status assembler_first_pass(file_context** contexts);
+status update_symbol_info(symbol* existing_symbol, int address);
+
+symbol* create_symbol(const char* label, int address);
+symbol* add_symbol(file_context *src, const char* label, int address);
+symbol* find_symbol(const char* label);
+
+void free_symbol_table();
 #endif
