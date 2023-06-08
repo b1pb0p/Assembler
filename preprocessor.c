@@ -56,7 +56,7 @@ status assembler_preprocessor(file_context *src, file_context *dest) {
             continue;
         }
 
-        if (isdigit(*line)) {  /* TODO: check if a line can start with a digit */
+        if (isdigit(*line)) {
             found_error = 1;
             handle_error(ERR_LINE_START_DIGIT, src);
         }
@@ -135,7 +135,7 @@ status handle_macro_start(file_context *src, char *line, int *found_macro,
             while (*mcro && (*mcro == ' ' || *mcro == '\t')) {
                 mcro++;
             }
-            word_len = get_word(&mcro);
+            word_len = get_word_length(&mcro);
 
             if (copy_n_string(&word, mcro, word_len) != NO_ERROR) {
                 free(word);
@@ -172,7 +172,7 @@ status handle_macro_start(file_context *src, char *line, int *found_macro,
 
             endmcro = mcro;
             COUNT_SPACES(line_offset, endmcro);
-            endmcro += line_offset + get_word(&endmcro);
+            endmcro += line_offset + get_word_length(&endmcro);
             COUNT_SPACES(line_offset, endmcro);
             if (endmcro[line_offset] != '\0') {
                 handle_error(ERR_EXTRA_TEXT, src); /* Extraneous text after macros name */
@@ -333,7 +333,7 @@ status write_to_file(file_context *src, file_context *dest, char *line, int foun
         }
         if (*ptr == '\0')
             break;
-        word_len = get_word(&ptr);
+        word_len = get_word_length(&ptr);
         if (copy_n_string(&word, ptr, word_len) != NO_ERROR) {
             free(word);
             return TERMINATE;

@@ -10,8 +10,8 @@
 
 /* Status messages */
 const char *msg[MSG_LEN] = {
-        "Assembly completed without errors. Output files generated.",
-        "Assembly terminated with errors. No output files generated.",
+        "Assembly completed without errors. Output file(s) generated.",
+        "Assembly terminated with errors. No output file(s) generated.",
         "Internal Error - Invalid function call - %s.",
         "Assembler - Memory allocation error.",
         "Assembler - Unable to open file - %s",
@@ -37,13 +37,11 @@ const char *msg[MSG_LEN] = {
         "%s - Duplicate macro name on line %d.",
         "%s - Missing opening 'mcro' on line %d.",
         "%s - Missing closing 'endmcro' on line %d.",
-        "Preprocessor (%d/%d) - No output file generated - %s.",
-        "Preprocessor (%d/%d) - Output file successfully generated - %s.",
-        "First Pass (%d/%d) - Output file successfully generated - %s.",
-        "Second Pass (%d/%d) - Output file successfully generated - %s.",
-        "First Pass (%d/%d) - No output file generated - %s.",
-        "Second Pass (%d/%d) - No output file generated - %s.",
-        "Assembler process for - %s.as terminated with errors. No output files generated.",
+        "Preprocessor (%d/%d) - No output file(s) generated - %s.",
+        "Preprocessor (%d/%d) - Output file(s) successfully generated - %s.",
+        "First Pass (%d/%d) - Output file(s) successfully generated - %s.",
+        "First Pass (%d/%d) - No output file(s) generated - %s.",
+        "Assembler process for - %s.as terminated with errors. No output file(s) generated.",
 };
 
 /**

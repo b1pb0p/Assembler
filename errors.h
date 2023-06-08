@@ -40,9 +40,7 @@ typedef enum {
     ERR_PRE,
     PRE_FILE_OK,
     FIRST_PASS_OK,
-    SECOND_PASS_OK,
     ERR_FIRST_PASS,
-    ERR_SECOND_PASS,
     ERR_FOUND_ASSEMBLER
 } status;
 

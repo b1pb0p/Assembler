@@ -15,7 +15,7 @@
 #define MACRO_END "endmcro"
 #define SKIP_MCRO 4 /* mcro length */
 #define SKIP_MCR0_END 7 /* endmcro length */
-#define MAX_BUFFER_LENGTH 256
+
 
 typedef struct macro_node{
     char* name;

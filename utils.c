@@ -99,7 +99,7 @@ file_context* create_file_context(const char* file_name, char* ext, size_t ext_l
  * @param ptr Pointer to the input string. Updated to point to the start of the word.
  * @return Length of the word.
  */
-size_t get_word(char **ptr) {
+size_t get_word_length(char **ptr) {
     char *start;
     size_t length = 0;
 
@@ -111,6 +111,33 @@ size_t get_word(char **ptr) {
         (*ptr)++;
         length++;
     }
+
+    *ptr = start;
+    return length;
+}
+
+/**
+ * Finds the length of the consecutive characters in a word, skipping leading white spaces.
+ * Updates the pointer to point to the start of the next word.
+ *
+ * @param ptr  Pointer to the input string. Updated to point to the start of the next word.
+ * @param word Pointer to the output buffer to store the word found.
+ * @return Length of the word.
+ */
+size_t get_word(char **ptr, char *word) {
+    char *start;
+    size_t length = 0;
+
+    while (**ptr && isspace((int)**ptr)) {
+        (*ptr)++;
+    }
+    start = *ptr;
+    while (**ptr && !isspace((int)**ptr)) {
+        word[length] = **ptr;
+        (*ptr)++;
+        length++;
+    }
+    word[length] = '\0';
 
     *ptr = start;
     return length;
@@ -221,7 +248,7 @@ void free_file_context(file_context** context) {
 void free_file_context_array(file_context** contexts, int size) {
     int i;
 
-    if (contexts == NULL)
+    if (!contexts)
         return;
 
     for (i = 0; i < size; i++)

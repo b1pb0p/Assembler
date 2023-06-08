@@ -160,7 +160,7 @@ char* convert_bin_to_base64(const char* binary) {
  * @param data The data_image structure containing the binary components.
  * @return The status of the base64 word creation. Returns NO_ERROR if successful, or FAILURE if an error occurs.
  */
-status creat_base64_word(data_image* data) {
+status create_base64_word(data_image* data) {
     status report = NO_ERROR;
     char* binary_word = malloc((BINARY_BITS + 1) * sizeof(char));
 
@@ -170,7 +170,7 @@ status creat_base64_word(data_image* data) {
     }
 
     if (!data) {
-        handle_error(TERMINATE, "creat_base64_word()");
+        handle_error(TERMINATE, "create_base64_word()");
         free(binary_word);
         return FAILURE;
     }
@@ -441,6 +441,24 @@ void free_symbol(symbol** symbol_t) {
     *symbol_t = NULL;
 }
 
+void free_symbol_table(symbol ***p_symbol_table, size_t *size) {
+    size_t i;
+    symbol** symbol_table = NULL;
+
+    if (!p_symbol_table || !(*p_symbol_table))
+        return;
+
+    symbol_table = *p_symbol_table;
+
+    for (i = 0; i < *size; ++i)
+        if (symbol_table[i])
+            free_symbol(&(symbol_table[i]));
+
+    free(symbol_table);
+    *p_symbol_table = NULL;
+    *size = 0;
+}
+
 /**
  * Frees the memory allocated for a data_image structure, including its members and the data pointer itself.
  *
@@ -464,17 +482,18 @@ void free_data_image(data_image** data) {
  * @param data_array Pointer to the array of data_image structures to be freed.
  * @param size       Size of the data_array.
  */
-void free_data_image_array(data_image*** data_array, int size) {
+void free_data_image_array(data_image ***data_array, size_t *size) {
     int i;
 
     if (!data_array || !*data_array) return;
 
-    for (i = 0; i < size; i++) {
+    for (i = 0; i < *size; i++) {
         free_data_image(&((*data_array)[i]));
     }
 
     free(*data_array);
     *data_array = NULL;
+    *size = 0;
 }
 
 /**

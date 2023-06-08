@@ -6,7 +6,17 @@
 #ifndef ASSEMBLER_DATA_H
 #define ASSEMBLER_DATA_H
 
+#include "utils.h"
+
 #define REGISTER_CH '@'
+
+typedef enum {
+    DEFAULT_12BIT,
+    REG_DEST,
+    REG_SRC,
+    REG_REG,
+    ADDRESS
+} concat_actions;
 
 typedef struct {
     char *label;
@@ -14,8 +24,6 @@ typedef struct {
     int address_decimal;
     int is_missing_info;
 } symbol;
-
-#include "passes.h"
 
 typedef struct {
     char* binary_src;
@@ -33,18 +41,20 @@ typedef struct {
 
 } data_image;
 
-
 char* convert_bin_to_base64(const char* binary);
 char* truncate_string(const char* input, int length);
 char* decimal_to_binary12(int decimal);
 
 void free_symbol(symbol** symbol_t);
+void free_symbol_table(symbol ***p_symbol_table, size_t *size);
 void free_data_image(data_image** data);
-void free_data_image_array(data_image*** data_array, int size);
+void free_data_image_array(data_image ***data_array, size_t *size);
 void free_strings(int num_strings, ...);
 
-status creat_base64_word(data_image* data);
+status create_base64_word(data_image* data);
 status is_legal_addressing(command cmd, addressing_modes src, addressing_modes dest);
+symbol* create_symbol(const char* label, int address);
+
 addressing_modes get_addressing_mode(const char *src);
 
 #endif
