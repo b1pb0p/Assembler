@@ -24,22 +24,23 @@
 #define ADDRESS_START 100
 
 
-status assembler_first_pass(file_context ***contexts);
-status assembler_second_pass(file_context ***contexts);
+status assembler_first_pass(file_context **src);
+status assembler_second_pass(file_context **src);
 status update_symbol_info(symbol* existing_symbol, int address);
-status write_symbol_info(file_context *ctx, symbol *sym);
-status generate_obj_output(file_context *obj_file, int ic, int dc);
-status process_line(char *p_line, int ic, int dc);
-status process_label(const char *label, int ic);
-status process_command_word(const char *command, char *p_line, char *first_param, char *second_param);
-status skip_white_spaces(char *line);
+status generate_obj_output(const char *file_name, int ic, int dc);
+status generate_directive_output(const char *file_name, char *ext, directive target);
+status process_line(file_context *src, char *p_line);
+status process_label(file_context *src, const char *label);
+status process_command_word(file_context *src, char *p_line, char *first_param, char *second_param);
 
 symbol* add_symbol(file_context *src, const char* label, int address);
 symbol* find_symbol(const char* label);
 
-void cleanup_output_files(file_context ***contexts);
+void free_global_data_and_symbol();
+void cleanup(file_context **src);
 
 int is_label(const char *label);
+int is_dot_directive(const char *word, const char *directive);
 
 
 #endif

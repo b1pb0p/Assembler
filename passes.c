@@ -11,67 +11,89 @@
 #include "errors.h"
 #include "data.h"
 
-#define INVAL_INPUT_RETURN(name) if (!src || !out_obj || !out_entry || !out_extern) { \
-    handle_error(TERMINATE, "assembler_" #name "_pass()"); \
-    return FAILURE; \
+
+#define IS_ENTRY(word) is_dot_directive(word, "entry")
+#define IS_EXTERN(word) is_dot_directive(word, "extern")
+#define IS_DATA(word) is_dot_directive(word, "data")
+#define IS_STRING(word) is_dot_directive(word, "string")
+
+#define UPDATE_REPORT_STATUS(condition, file) if ((condition) != NO_ERROR) { \
+cleanup(*(file)); \
+return FAILURE; \
 }
 
-symbol **symbol_table = NULL;
-data_image **data_img = NULL;
-size_t symbol_count = 0;
-size_t data_img_count = 0;
 
-status assembler_first_pass(file_context ***contexts) {
+
+
+
+symbol **symbol_table = NULL;
+data_image **data_img_obj = NULL;
+data_image **data_img_ent = NULL;
+data_image **data_img_ext = NULL;
+
+size_t symbol_count = 0;
+size_t data_img_obj_count = 0;
+size_t data_img_ent_count = 0;
+size_t data_img_ext_count = 0;
+
+status assembler_first_pass(file_context **src) {
     char line[MAX_BUFFER_LENGTH];
-    file_context *src, *out_entry, *out_extern, *out_obj;
+    file_context *p_src;
     status report = NO_ERROR;
 
-    if (!contexts || !*contexts)
+    p_src = *src;
+
+    if (!p_src)
         return FAILURE;
-
-    src = (*contexts)[0];
-    out_entry = (*contexts)[1];
-    out_extern = (*contexts)[2];
-    out_obj = (*contexts)[3];
-
-    INVAL_INPUT_RETURN(first);
 
     /* Checking for comment lines (;), invalid line start and handling too long lines
      * is taken care of at the preprocessor stage. */
-    while (fscanf(src->file_ptr, "%[^\n]%*c", line) == 1) {
-        report =  process_line(line, src->ic, src->dc);
-        src->lc++;
+    while (fscanf(p_src->file_ptr, "%[^\n]%*c", line) == 1) {
+        report =  process_line(p_src,line);
+        p_src->lc++;
     }
-
 
     /* Generate object output file only if no error occurred */
     if (report == NO_ERROR)
-        report = assembler_second_pass(contexts);
+        report = assembler_second_pass(src);
     else /* Cleanup output files if an error occurred */
-        cleanup_output_files(contexts);
+        cleanup(src);
 
     return report;
 }
 
 /*** NEED TO BE WRITTEN AGAIN ***/
-status process_line(char *p_line, int ic, int dc) {
-    char label[MAX_LABEL_LENGTH];
-    int word_length;
+status process_line(file_context *src, char *p_line) {
+    char word[MAX_LABEL_LENGTH];
     status report = NO_ERROR;
 
-    word_length = get_word(&p_line, label);
+    (void)get_word(&p_line, word);
 
-    if (is_label(label)) {
-        report = process_label(label, ic);
-        if (report != NO_ERROR) {
-            return report;
-        }
-        word_length = get_word(&p_line, label);
+    if (IS_DATA(word)) {
+        process_data(src, &p_line);
     }
+    else if (IS_ENTRY(word)) {
 
-    if (is_command(label)) {
+    }
+    else if (IS_EXTERN(word)) {
+
+    }
+    else if (IS_STRING(word))
+
+
+
+
+
+        if (is_label(word)) {
+            report = process_label(src, word);
+            if (report != NO_ERROR)
+                return report;
+            (void)get_word(&p_line, word);
+        }
+
+    if (is_command(word)) {
         char first_param[MAX_LABEL_LENGTH], second_param[MAX_LABEL_LENGTH];
-        report = process_command_word(label, p_line, first_param, second_param);
+        report = process_command_word(src, p_line, first_param, second_param);
         if (report == NO_ERROR) {
             /* TODO: FILL WITH CODE HOPEFULLY */
         }
@@ -80,6 +102,25 @@ status process_line(char *p_line, int ic, int dc) {
     return report;
 }
 
+/**
+ * Checks if a word is a dot directive, such as '.data', '.string', etc.
+ *
+ * @param word The word to check.
+ * @param directive The specific dot directive string to compare with.
+ * @return 1 if the word is a dot directive, 0 otherwise.
+ */
+int is_dot_directive(const char *word, const char *directive) {
+    if (word && *word == '.' && strcmp(word + 1, directive) == 0 && *(word + 1 + strlen(directive)) == '\0')
+        return 1;
+    return 0;
+}
+
+/**
+ * Checks if a string is a valid label.
+ *
+ * @param label The string to check.
+ * @return 1 if the string is a valid label, 0 otherwise.
+ */
 int is_label(const char *label) {
     size_t length = strlen(label);
     if (length == 0 || length > MAX_LABEL_LENGTH)
@@ -89,7 +130,7 @@ int is_label(const char *label) {
     return 0;
 }
 
-status process_label(const char *label, int ic) {
+status process_label(file_context *src, const char *label) {
     char clean_label[MAX_LABEL_LENGTH];
     symbol *new_symbol = NULL;
 
@@ -97,22 +138,21 @@ status process_label(const char *label, int ic) {
     clean_label[strlen(label) - 1] = '\0';
 
     if (is_directive(clean_label) || is_command(clean_label)) {
-        handle_error(TERMINATE, "Invalid label name");
+        handle_error(ERR_INVAL_LABEL, src, clean_label);
         return FAILURE;
     }
 
-    new_symbol = create_symbol(clean_label, ic + ADDRESS_START);
-    return NO_ERROR;
+    new_symbol = add_symbol(src, clean_label, src->ic + ADDRESS_START);
+
+    return new_symbol ? NO_ERROR : FAILURE;
 }
 
-status process_command_word(const char *command, char *p_line, char *first_param, char *second_param) {
-    size_t word_length;
-
-    word_length = get_word(&p_line, first_param);
+status process_command_word(file_context *src, char *p_line, char *first_param, char *second_param) {
+    (void)get_word(&p_line, first_param);
 
     if (*p_line == ',') {
         p_line++;
-        word_length = get_word(&p_line, second_param);
+        (void)get_word(&p_line, second_param);
 
         if (*p_line != '\n' && *p_line != '\0') {
             handle_error(TERMINATE, "Invalid command format");
@@ -127,18 +167,6 @@ status process_command_word(const char *command, char *p_line, char *first_param
 
     return NO_ERROR;
 }
-
-status skip_white_spaces(char *line) {
-    int i;
-
-    for (i = 0; line[i] == ' ' || line[i] == '\t' || line[i] == '\n'; i++)
-        ;
-    if (line[i] == '\0' || line[i] == '\n')
-        return EOF;
-
-    strcpy(line, line + i);
-    return NO_ERROR;
-}
 /*** UP HERE BUDDY ***/
 
 
@@ -146,104 +174,105 @@ status skip_white_spaces(char *line) {
 /**
  * Perform the second pass of the assembler, generating the object output.
  *
- * @param contexts The array of file contexts containing input and output file information.
+ * @param src Pointer to the file context for the input and output file information.
  * @return The status of the operation (NO_ERROR or FAILURE).
  */
-status assembler_second_pass(file_context ***contexts) {
-    file_context *src, *out_entry, *out_extern, *out_obj;
+status assembler_second_pass(file_context **src) {
     status report = NO_ERROR;
+    file_context *p_src = *src;
 
-    if (!contexts || !*contexts)
+    if (!p_src)
         return FAILURE;
 
-    src = (*contexts)[0];
-    out_entry = (*contexts)[1];
-    out_extern = (*contexts)[2];
-    out_obj = (*contexts)[3];
+    report = generate_obj_output(p_src->file_name_wout_ext, p_src->ic, p_src->dc);
+    UPDATE_REPORT_STATUS(report, &src);
+    report = generate_directive_output(p_src->file_name_wout_ext, ENTRY_EXT, ENTRY);
+    UPDATE_REPORT_STATUS(report, &src);
+    report = generate_directive_output(p_src->file_name_wout_ext, EXTERNAL_EXT, EXTERN);
+    UPDATE_REPORT_STATUS(report, &src);
 
-    INVAL_INPUT_RETURN(second);
-
-    report = generate_obj_output(out_obj, src->ic, src->dc);
-
-    /* free global data_image and symbol_table arrays */
-    free_data_image_array(&data_img, &data_img_count);
-    free_symbol_table(&symbol_table, &symbol_count);
-
-    if (report != NO_ERROR)
-        cleanup_output_files(contexts);
-
+    free_global_data_and_symbol();
     return report;
 }
 
-
 /**
- * Generate the object output file based on the data image and symbol table.
- *
- * @param obj_file The file context for the object output file.
- * @param ic The instruction count.
- * @param dc The data count.
- * @return The status of the operation (NO_ERROR or FAILURE).
- */
-status generate_obj_output(file_context *obj_file, int ic, int dc) {
+* Generates the output file for the object code.
+*
+* Generate the object output file based on the data image and symbol table.
+*
+* @param file_name The name of the output file.
+* @param ic The instruction count (IC).
+* @param dc The data count (DC).
+* @return The status of the operation. Returns NO_ERROR on success, or FAILURE if an error occurred.
+*/
+status generate_obj_output(const char *file_name, int ic, int dc) {
     int i;
     status report = NO_ERROR;
+    file_context *obj_file = create_file_context(file_name, OBJECT_EXT, FILE_EXT_LEN, FILE_MODE_WRITE, &report);
+
+    if (!obj_file)
+        return FAILURE;
 
     fprintf(obj_file->file_ptr, "%d %d\n", ic, dc);
 
-    for (i = 0; i < data_img_count; i++) {
-        if ((*data_img[i]).missing_info)
+    for (i = 0; i < data_img_obj_count; i++) {
+        if ((*data_img_obj[i]).missing_info)
             report = FAILURE;
 
-        (*data_img[i]).base64_word = convert_bin_to_base64((*data_img)->symbol_t->address_binary);
-        if (!(*data_img[i]).base64_word)
+        (*data_img_obj[i]).base64_word = convert_bin_to_base64((*data_img_obj)->symbol_t->address_binary);
+        if (!(*data_img_obj[i]).base64_word)
             report = FAILURE;
 
-        fprintf(obj_file->file_ptr, "%s\n", (*data_img[i]).base64_word);
-
+        fprintf(obj_file->file_ptr, "%s\n", (*data_img_obj[i]).base64_word);
     }
-
+    free_file_context(&obj_file);
     return report;
 }
 
 /**
- * Write the symbol information to the specified file context,
- * which can be an entry or extern file.
+ * Generates the output file for entry or extern directives.
  *
- * @param ctx The file context for writing symbol information.
- * @param sym The symbol to write.
- * @return The status of the operation (NO_ERROR or FAILURE).
+ * This function generates the output file for entry or extern directives, containing
+ * the corresponding symbol labels and their decimal addresses.
+ *
+ * @param file_name The name of the output file.
+ * @param ext The file extension for the output file.
+ * @param target The target directive (ENTRY or EXTERN).
+ * @return The status of the operation. Returns NO_ERROR on success, or FAILURE if an error occurred.
  */
-status write_symbol_info(file_context *ctx, symbol *sym) {
-    if (!ctx)
+status generate_directive_output(const char *file_name, char *ext, directive target) {
+    status report = NO_ERROR;
+    size_t i, boundary;
+    data_image **p_data;
+    symbol *p_sym;
+    file_context *dest = create_file_context(file_name, ext, FILE_EXT_LEN_OUT, FILE_MODE_WRITE, &report);
+
+    boundary = target == EXTERN ? data_img_ext_count : data_img_ent_count;
+    p_data = target == EXTERN ? data_img_ext : data_img_ent;
+
+    if (!dest)
         return FAILURE;
 
-    fprintf(ctx->file_ptr, "%s\t%d\n", sym->label, sym->address_decimal);
+    if (!p_data || !*p_data)
+        return NO_ERROR;
 
-    return NO_ERROR;
+    for (i = 0; i < boundary; i++) {
+        p_sym = p_data[i]->symbol_t;
+        fprintf(dest->file_ptr, "%s\t%d\n", p_sym->label, p_sym->address_decimal);
+    }
+    free_file_context(&dest);
+    return report;
 }
 
 /**
- * Cleanup and remove the output files associated with the file contexts.
- *
- * @param contexts The array of file context pointers.
+ * Frees the global data image arrays and symbol table.
  */
-void cleanup_output_files(file_context ***contexts) {
-    int i;
-
-    for (i = 0; i < OUTPUT_NUM_FILES; i++) {
-        if (!*contexts[i]) continue;
-        fclose((*contexts[i])->file_ptr);
-        remove((*contexts[i])->file_name);
-        free_file_context(contexts[i]);
-    }
+void free_global_data_and_symbol() {
+    free_data_image_array(&data_img_obj, &data_img_obj_count);
+    free_data_image_array(&data_img_ent, &data_img_ent_count);
+    free_data_image_array(&data_img_ext, &data_img_ext_count);
+    free_symbol_table(&symbol_table, &symbol_count);
 }
-
-
-
-
-
-
-
 
 /**
  * Add a symbol to the symbol table.
@@ -329,111 +358,20 @@ status update_symbol_info(symbol* existing_symbol, int address) {
     return NO_ERROR;
 }
 
+/**
+ * Cleans up a file_context and associated resources.
+ * Closes the file, removes the file from the filesystem,
+ * frees the file_context memory, and clears the pointer.
+ *
+ * @param src A pointer to the file_context pointer.
+ *            The pointer will be set to NULL after cleanup.
+ */
+void cleanup(file_context **src) {
+    file_context *p_src = *src;
 
-
-
-/*
-
-
-    char line[MAX_LINE_LENGTH];
-    int IC = 0; // Instruction Counter
-    int DC = 0; // Data Counter
-    int hasSymbolDefinition = 0; // Flag for symbol definition
-
-    while (fgets(line, sizeof(line), sourceFile) != NULL) {
-        // Check if line is empty or a comment
-        if (line[0] == '\n' || line[0] == ';') {
-            continue;
-        }
-
-        // Remove newline character at the end
-        line[strcspn(line, "\n")] = '\0';
-
-        // Tokenize the line
-        char* token = strtok(line, " \t");
-        if (token == NULL) {
-            continue; // Empty line
-        }
-
-        // Check if the first field is a symbol
-        int isSymbol = (strchr(token, ':') != NULL);
-        if (isSymbol) {
-            hasSymbolDefinition = 1;
-            // Process symbol definition, insert into symbol table
-            char* symbolName = strtok(token, ":");
-            Symbol* existingSymbol = findSymbol(symbolName);
-            if (existingSymbol != NULL) {
-                printf("Error: Symbol '%s' already defined.\n", symbolName);
-                return 1;
-            }
-            insertSymbol(symbolName, (hasSymbolDefinition == DATA) ? DC : IC, hasSymbolDefinition ? DATA : EXTERN);
-            token = strtok(NULL, " \t"); // Move to next token
-        }
-
-        // Process directives and instructions
-        if (strcmp(token, "data") == 0) {
-            // Process data directive
-            token = strtok(NULL, " \t"); // Move to next token
-            while (token != NULL) {
-                // Process data value
-                int value = atoi(token);
-                // Update data image and increment DC
-                // ...
-                token = strtok(NULL, " \t"); // Move to next token
-            }
-        } else if (strcmp(token, "string") == 0) {
-            // Process string directive
-            token = strtok(NULL, ""); // Move to next token (remaining line)
-            // Process string value
-            // Update data image and increment DC
-            // ...
-        } else if (strcmp(token, "entry") == 0) {
-            // Process entry directive
-            token = strtok(NULL, " \t"); // Move to next token
-            while (token != NULL) {
-                // Process entry symbol
-                Symbol* entrySymbol = findSymbol(token);
-                if (entrySymbol != NULL) {
-                    entrySymbol->type = ENTRY;
-                } else {
-                    printf("Error: Entry symbol '%s' not found.\n", token);
-                    return 1;
-                }
-                token = strtok(NULL, " \t"); // Move to next token
-            }
-        } else if (strcmp(token, "extern") == 0) {
-            // Process extern directive
-            token = strtok(NULL, " \t"); // Move to next token
-            while (token != NULL) {
-                // Process extern symbol
-                Symbol* existingSymbol = findSymbol(token);
-                if (existingSymbol != NULL) {
-                    printf("Error: Symbol '%s' already defined.\n", token);
-                    return 1;
-                }
-                insertSymbol(token, 0, EXTERN);
-                token = strtok(NULL, " \t"); // Move to next token
-            }
-        } else {
-            // Process instruction
-            // Update symbol table and increment IC accordingly
-            // Look for operation name in operation table
-            // Analyze instruction operands and calculate L
-            // Build binary code of the instruction
-        }
-    }
-
-    fclose(sourceFile);
-
-    // Update data type symbols in the symbol table with final IC value
-    for (int i = 0; i < symbolCount; i++) {
-        if (symbolTable[i].type == DATA) {
-            symbolTable[i].value += IC;
-        }
-    }
-
-    // Start second pass
-
-    return 0;
+    fclose(p_src->file_ptr);
+    remove(p_src->file_name);
+    free_file_context(&p_src);
+    *src = NULL;
+    free_global_data_and_symbol();
 }
-*/
