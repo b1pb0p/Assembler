@@ -49,7 +49,7 @@ const char *commands[COMMANDS_LEN] = {
 file_context* create_file_context(const char* file_name, char* ext, size_t ext_len, char* mode, status *report) {
     file_context* fc;
     FILE* file = NULL;
-    char* file_name_w_ext = NULL;
+    char *file_name_w_ext = NULL;
     size_t len;
 
     fc = malloc(sizeof(file_context));
@@ -67,8 +67,16 @@ file_context* create_file_context(const char* file_name, char* ext, size_t ext_l
         return NULL;
     }
 
+
     strcpy(file_name_w_ext, file_name);
     strcat(file_name_w_ext, ext);
+    fc->file_name_wout_ext = strdup( file_name);
+
+    if (!(fc->file_name_wout_ext)) {
+        *report = ERR_MEM_ALLOC;
+        free_file_context(&fc);
+        return NULL;
+    }
 
     fc->file_name = NULL;
     fc->file_ptr = NULL;
@@ -201,6 +209,30 @@ status copy_n_string(char** target, const char* source, size_t count) {
     return NO_ERROR;
 }
 
+/**
+ * Skips leading white spaces (spaces, tabs, and newlines) in a line and updates the line pointer.
+ *
+ * @param line The line to skip white spaces from.
+ * @return Status indicating the result of the operation: NO_ERROR if successful, or EOF if end of line reached.
+ */
+status skip_white_spaces(char *line) {
+    int i;
+
+    for (i = 0; line[i] == ' ' || line[i] == '\t' || line[i] == '\n'; i++)
+        ;
+    if (line[i] == '\0' || line[i] == '\n')
+        return EOF;
+
+    strcpy(line, line + i);
+    return NO_ERROR;
+}
+
+/**
+ * Checks if a given string is a valid directive.
+ *
+ * @param src The string to check.
+ * @return The corresponding directive index if the string is a valid directive, otherwise 0.
+ */
 directive is_directive(const char* src) {
     int i;
     if (src)
@@ -210,6 +242,12 @@ directive is_directive(const char* src) {
     return 0;
 }
 
+/**
+ * Checks if a given string is a valid command.
+ *
+ * @param src The string to check.
+ * @return The corresponding command index if the string is a valid command, otherwise 0.
+ */
 command is_command(const char* src) {
     int i;
     if (src)
@@ -231,6 +269,9 @@ void free_file_context(file_context** context) {
             fclose((*context)->file_ptr);
 
         if ((*context)->file_name != NULL)
+            free((*context)->file_name);
+
+        if ((*context)->file_name_wout_ext != NULL)
             free((*context)->file_name);
 
         free(*context);

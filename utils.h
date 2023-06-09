@@ -9,13 +9,20 @@
 #include "errors.h"
 
 #define FILE_EXT_LEN 3 /* .as */
-#define FILE_EXT_LEN_OBJ 4 /* .obj */
+#define FILE_EXT_LEN_OUT 4 /* .obj */
 #define OUTPUT_NUM_FILES 4
 #define MAX_LINE_LENGTH 82 /* 80 + '\0' */
 #define MAX_LABEL_LENGTH 32 /*  31 + '\0' */
 #define DIRECTIVE_LEN 4
 #define COMMANDS_LEN 16
 #define MAX_BUFFER_LENGTH 256
+#define FILE_MODE_READ "r"
+#define FILE_MODE_WRITE "w"
+#define ASSEMBLY_EXT ".as"
+#define PREPROCESSOR_EXT  ".am"
+#define OBJECT_EXT  ".ob"
+#define ENTRY_EXT  ".ent"
+#define EXTERNAL_EXT ".ext"
 
 extern const char *directives[DIRECTIVE_LEN];
 extern const char *commands[COMMANDS_LEN];
@@ -63,6 +70,7 @@ typedef enum {
 typedef struct {
     FILE* file_ptr;
     char* file_name;
+    char* file_name_wout_ext;
     int ic; /* Instructions counter */
     int dc; /* Data counter */
     int lc; /* Line counter */
@@ -75,6 +83,7 @@ size_t get_word(char **ptr, char *word);
 
 status copy_string(char** target, const char* source);
 status copy_n_string(char** target, const char* source, size_t count);
+status skip_white_spaces(char *line);
 
 directive is_directive(const char* src);
 command is_command(const char* src);
