@@ -13,7 +13,7 @@
 #include "errors.h"
 #include "utils.h"
 
-/* "Private helper functions */
+/* "Private" helper functions */
 status concat_default_12bit(data_image* data, char** binary_word);
 status concat_reg_dest(data_image* data, char** binary_word);
 status concat_reg_src(data_image* data, char** binary_word);
@@ -200,6 +200,22 @@ status create_base64_word(data_image* data) {
 
     free(binary_word);
     return report;
+}
+
+/**
+ * Creates a new data image with the specified location counter (lc).
+ *
+ * @param lc The location counter value for the data image.
+ * @return A pointer to the newly created data image, or NULL if memory allocation fails.
+ */
+data_image* create_data_image(int lc) {
+    data_image* p_ret = malloc(sizeof(data_image));
+    if (!p_ret) {
+        handle_error(ERR_MEM_ALLOC);
+        return NULL;
+    }
+    p_ret->lc = lc;
+    return p_ret;
 }
 
 /**
@@ -441,6 +457,12 @@ void free_symbol(symbol** symbol_t) {
     *symbol_t = NULL;
 }
 
+/**
+ * Frees the memory allocated for a symbol table.
+ *
+ * @param p_symbol_table Pointer to the symbol table.
+ * @param size Pointer to the size of the symbol table.
+ */
 void free_symbol_table(symbol ***p_symbol_table, size_t *size) {
     size_t i;
     symbol** symbol_table = NULL;

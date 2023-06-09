@@ -32,7 +32,6 @@ typedef struct {
     char* binary_a_r_e;
     char* base64_word;
 
-    directive type; /* TODO: check if necessary */
     concat_actions concat;
     symbol *symbol_t;
 
@@ -53,7 +52,8 @@ void free_strings(int num_strings, ...);
 
 status create_base64_word(data_image* data);
 status is_legal_addressing(command cmd, addressing_modes src, addressing_modes dest);
-symbol* create_symbol(const char* label, int address);
+
+data_image* create_data_image(int lc);
 
 addressing_modes get_addressing_mode(const char *src);
 
