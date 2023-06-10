@@ -125,21 +125,19 @@ size_t get_word_length(char **ptr) {
 }
 
 /**
- * Finds the length of the consecutive characters in a word, skipping leading white spaces.
- * Updates the pointer to point to the start of the next word.
+ * Extracts the next word from the input string pointed to by 'ptr'.
+ * It will be updated to point to the next character after the extracted word.
  *
- * @param ptr  Pointer to the input string. Updated to point to the start of the next word.
- * @param word Pointer to the output buffer to store the word found.
- * @return Length of the word.
+ * @param ptr The pointer to the input string.
+ * @param word The buffer to store the extracted word.
+ * @return The length of the extracted word.
  */
 size_t get_word(char **ptr, char *word) {
-    char *start;
     size_t length = 0;
 
     while (**ptr && isspace((int)**ptr)) {
         (*ptr)++;
     }
-    start = *ptr;
     while (**ptr && !isspace((int)**ptr)) {
         word[length] = **ptr;
         (*ptr)++;
@@ -147,7 +145,6 @@ size_t get_word(char **ptr, char *word) {
     }
     word[length] = '\0';
 
-    *ptr = start;
     return length;
 }
 
@@ -174,9 +171,12 @@ status copy_string(char** target, const char* source) {
 
     strcpy(temp, source);
     temp[strlen(source)] = '\0';
-    if (!*target) free(*target);
-    *target = temp;
 
+    if (!*target) *target = NULL;
+
+    if (!*target) free(*target);
+
+    *target = temp;
     return NO_ERROR;
 }
 
@@ -204,7 +204,11 @@ status copy_n_string(char** target, const char* source, size_t count) {
     }
     strncpy(temp, source, count);
     temp[count] = '\0';
+
+    if (!*target)*target = NULL;
+
     if (!*target) free(*target);
+
     *target = temp;
     return NO_ERROR;
 }
@@ -258,6 +262,21 @@ command is_command(const char* src) {
 }
 
 /**
+ * Duplicates a string by allocating memory and copying the contents of the original string.
+ *
+ * @param s The original string to be duplicated.
+ * @return A pointer to the newly allocated duplicated string, or NULL if memory allocation fails.
+ */
+char *strdup(const char *s) {
+    size_t len = strlen(s) + 1;
+    char *dup = malloc(len);
+    if (dup) {
+        memcpy(dup, s, len);
+    }
+    return dup;
+}
+
+/**
  * Frees the memory occupied by a file_context structure.
  * Closes the file pointer if it's open and frees the dynamically allocated file name.
  *
@@ -272,7 +291,7 @@ void free_file_context(file_context** context) {
             free((*context)->file_name);
 
         if ((*context)->file_name_wout_ext != NULL)
-            free((*context)->file_name);
+            free((*context)->file_name_wout_ext);
 
         free(*context);
         *context = NULL;

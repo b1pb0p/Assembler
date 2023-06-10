@@ -10,12 +10,13 @@
 
 #define FILE_EXT_LEN 3 /* .as */
 #define FILE_EXT_LEN_OUT 4 /* .obj */
-#define OUTPUT_NUM_FILES 4
 #define MAX_LINE_LENGTH 82 /* 80 + '\0' */
 #define MAX_LABEL_LENGTH 32 /*  31 + '\0' */
 #define DIRECTIVE_LEN 4
 #define COMMANDS_LEN 16
+#define STARTING_ADDRESS 100
 #define MAX_BUFFER_LENGTH 256
+
 #define FILE_MODE_READ "r"
 #define FILE_MODE_WRITE "w"
 #define ASSEMBLY_EXT ".as"
@@ -34,10 +35,11 @@ typedef enum {
 } ARE;
 
 typedef enum {
-   DATA,
-   STRING,
-   ENTRY,
-   EXTERN
+    DATA,
+    STRING,
+    ENTRY,
+    EXTERN,
+    DEFAULT /* Added field to indicate it belongs to the current file */
 } directive;
 
 typedef enum {
@@ -77,6 +79,8 @@ typedef struct {
 } file_context;
 
 file_context* create_file_context(const char* file_name, char* ext, size_t ext_len, char* mode, status *report);
+
+char *strdup(const char *s);
 
 size_t get_word_length(char **ptr);
 size_t get_word(char **ptr, char *word);
