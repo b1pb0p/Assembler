@@ -395,6 +395,9 @@ status add_macro(char* name, char* body) {
         return ERR_MEM_ALLOC;
     }
 
+    new_macro->name = NULL; /* Set name pointer to NULL to ensure proper initialization */
+    new_macro->body = NULL; /* Set body pointer to NULL to ensure proper initialization */
+
     s_name = copy_string(&new_macro->name, name);
     s_body = copy_string(&new_macro->body, body);
 
