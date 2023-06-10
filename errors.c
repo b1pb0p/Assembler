@@ -83,12 +83,12 @@ void handle_error(status code, ...) {
             fprintf(stderr, "%s", msg[FAILURE]);
         else if (code < OPEN_FILE)
             fprintf(stderr, msg[code], fc->file_name);
-        else if (code == ERR_INVAL_MACRO_NAME) {
+        else if (code == ERR_LABEL_DOES_NOT_EXIST || code == ERR_INVAL_LABEL) {
             fncall = va_arg(args, char*);
             num = va_arg(args, int);
             fprintf(stderr, msg[code], fc->file_name, fncall ,num);
         }
-        else if (code == ERR_LABEL_DOES_NOT_EXIST || code == ERR_INVAL_LABEL) {
+        else if (code == ERR_INVAL_MACRO_NAME) {
             fncall = va_arg(args, char*);
             fprintf(stderr, msg[code], fc->file_name, fncall ,fc->lc);
         }
