@@ -8,7 +8,6 @@
 #include "utils.h"
 #include "preprocessor.h"
 #include "passes.h"
-#include "assembler.h"
 
 #define HANDLE_STATUS(file, code) if ((code) == ERR_MEM_ALLOC) { \
     handle_error(code, (file)); \
@@ -23,12 +22,9 @@
     }                                      \
 else \
 break;
-/*
- *
 
-status assembler_second_pass(file_context* file_c);
-FILE **assembler_generate_output();
-*/
+status preprocess_file(const char* file_name, file_context** dest , int index, int max);
+void free_outs(file_context *** outs, int members); /* TODO: REMOVE */
 
 int main(int argc, char *argv[]) {
     int i;
