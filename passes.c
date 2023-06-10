@@ -35,10 +35,12 @@ size_t symbol_count = 0;
 size_t data_img_obj_count = 0;
 size_t data_img_ent_count = 0;
 size_t data_img_ext_count = 0;
+size_t DC = 0;
+size_t IC = 0;
 
 status assembler_first_pass(file_context **src) {
     char line[MAX_BUFFER_LENGTH];
-    file_context *p_src;
+    file_context *p_src = NULL;
     status report = NO_ERROR;
 
     p_src = *src;
@@ -62,6 +64,31 @@ status assembler_first_pass(file_context **src) {
     return report;
 }
 
+/**
+ * Perform the second pass of the assembler, generating the object output.
+ *
+ * @param src Pointer to the file context for the input and output file information.
+ * @return The status of the operation (NO_ERROR or FAILURE).
+ */
+status assembler_second_pass(file_context **src) {
+    status report = NO_ERROR;
+    file_context *p_src = *src;
+
+    if (!p_src)
+        return FAILURE;
+
+    report = generate_obj_output(p_src->file_name_wout_ext, IC, DC);
+    UPDATE_REPORT_STATUS(report, &src);
+    report = generate_directive_output(p_src->file_name_wout_ext, ENTRY_EXT, ENTRY);
+    UPDATE_REPORT_STATUS(report, &src);
+    report = generate_directive_output(p_src->file_name_wout_ext, EXTERNAL_EXT, EXTERN);
+    UPDATE_REPORT_STATUS(report, &src);
+
+    free_global_data_and_symbol();
+    return report;
+}
+
+
 /*** NEED TO BE WRITTEN AGAIN ***/
 status process_line(file_context *src, char *p_line) {
     char word[MAX_LABEL_LENGTH];
@@ -70,7 +97,7 @@ status process_line(file_context *src, char *p_line) {
     (void)get_word(&p_line, word);
 
     if (IS_DATA(word)) {
-        process_data(src, &p_line);
+        process_data(src, NULL, p_line);
     }
     else if (IS_ENTRY(word)) {
 
@@ -169,31 +196,71 @@ status process_command_word(file_context *src, char *p_line, char *first_param, 
 }
 /*** UP HERE BUDDY ***/
 
+status process_data(file_context *src, char *label, char *line) {
+    char word[MAX_LABEL_LENGTH];
+    int is_first_value = 0;
+    data_value value;
+    status report;
 
+    while (*line != '\n' || *line != '\0') {
+        (void)get_word(&line, word);
+        value.decimal_value = atoi(word);
+
+        if (!is_first_value) {
+            is_first_value = 1;
+            report =  add_data_image(src, label, DEFAULT, value);
+        }
+        else /* A label can only be associated with the initial value */
+            report =  add_data_image(src, NULL, DEFAULT, value);
+
+        if (report != NO_ERROR)
+            return FAILURE;
+    }
+    return NO_ERROR;
+}
 
 /**
- * Perform the second pass of the assembler, generating the object output.
+ * Add a new data image to the appropriate global data image array based on the directive.
  *
- * @param src Pointer to the file context for the input and output file information.
+ * @param src The file context containing input and output file information.
+ * @param label The label associated with the data image (optional).
+ * @param lc The location counter value of the data image.
+ * @param dir The directive indicating the type of data image.
  * @return The status of the operation (NO_ERROR or FAILURE).
  */
-status assembler_second_pass(file_context **src) {
-    status report = NO_ERROR;
-    file_context *p_src = *src;
+status add_data_image(file_context *src, const char* label, directive dir, data_value value) {
+    symbol* sym = NULL;
+    data_image* new_image = create_data_image(src->lc);
 
-    if (!p_src)
+    if (!new_image)
         return FAILURE;
 
-    report = generate_obj_output(p_src->file_name_wout_ext, p_src->ic, p_src->dc);
-    UPDATE_REPORT_STATUS(report, &src);
-    report = generate_directive_output(p_src->file_name_wout_ext, ENTRY_EXT, ENTRY);
-    UPDATE_REPORT_STATUS(report, &src);
-    report = generate_directive_output(p_src->file_name_wout_ext, EXTERNAL_EXT, EXTERN);
-    UPDATE_REPORT_STATUS(report, &src);
+    if (label) {
+        sym = find_symbol(label);
+        if (sym)
+            new_image->symbol_t = sym;
+        add_symbol(src, label, src->lc + STARTING_ADDRESS);
+    }
 
-    free_global_data_and_symbol();
-    return report;
+    new_image->value = value;
+
+    if (dir == DEFAULT) {
+        data_img_obj[data_img_obj_count] = new_image;
+        data_img_obj_count++;
+    } else if (dir == EXTERN) {
+        data_img_ext[data_img_ext_count] = new_image;
+        data_img_ext_count++;
+    } else if (dir == ENTRY) {
+        data_img_ent[data_img_ent_count] = new_image;
+        data_img_ent_count++;
+    }
+    else {
+        handle_error(TERMINATE, "add_data_image()");
+        return FAILURE;
+    }
+    return NO_ERROR;
 }
+
 
 /**
 * Generates the output file for the object code.
@@ -205,7 +272,7 @@ status assembler_second_pass(file_context **src) {
 * @param dc The data count (DC).
 * @return The status of the operation. Returns NO_ERROR on success, or FAILURE if an error occurred.
 */
-status generate_obj_output(const char *file_name, int ic, int dc) {
+status generate_obj_output(const char *file_name, size_t ic, size_t dc) {
     int i;
     status report = NO_ERROR;
     file_context *obj_file = create_file_context(file_name, OBJECT_EXT, FILE_EXT_LEN, FILE_MODE_WRITE, &report);
@@ -213,7 +280,7 @@ status generate_obj_output(const char *file_name, int ic, int dc) {
     if (!obj_file)
         return FAILURE;
 
-    fprintf(obj_file->file_ptr, "%d %d\n", ic, dc);
+    fprintf(obj_file->file_ptr, "%lu %lu\n", (unsigned long)ic, (unsigned long)dc);
 
     for (i = 0; i < data_img_obj_count; i++) {
         if ((*data_img_obj[i]).missing_info)
@@ -243,8 +310,8 @@ status generate_obj_output(const char *file_name, int ic, int dc) {
 status generate_directive_output(const char *file_name, char *ext, directive target) {
     status report = NO_ERROR;
     size_t i, boundary;
-    data_image **p_data;
-    symbol *p_sym;
+    data_image **p_data = NULL;
+    symbol *p_sym = NULL;
     file_context *dest = create_file_context(file_name, ext, FILE_EXT_LEN_OUT, FILE_MODE_WRITE, &report);
 
     boundary = target == EXTERN ? data_img_ext_count : data_img_ent_count;

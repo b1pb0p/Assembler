@@ -25,6 +25,11 @@ typedef struct {
     int is_missing_info;
 } symbol;
 
+typedef union {
+    long decimal_value;
+    char character;
+} data_value;
+
 typedef struct {
     char* binary_src;
     char* binary_opcode;
@@ -33,6 +38,7 @@ typedef struct {
     char* base64_word;
 
     concat_actions concat;
+    data_value value;
     symbol *symbol_t;
 
     int missing_info;

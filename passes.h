@@ -26,18 +26,22 @@
 
 status assembler_first_pass(file_context **src);
 status assembler_second_pass(file_context **src);
-status update_symbol_info(symbol* existing_symbol, int address);
-status generate_obj_output(const char *file_name, int ic, int dc);
-status generate_directive_output(const char *file_name, char *ext, directive target);
 status process_line(file_context *src, char *p_line);
 status process_label(file_context *src, const char *label);
+status process_data(file_context *src, char *label, char *line);
+status update_symbol_info(symbol* existing_symbol, int address);
+status generate_obj_output(const char *file_name, size_t ic, size_t dc);
+status generate_directive_output(const char *file_name, char *ext, directive target);
+status add_data_image(file_context *src, const char* label, directive dir, data_value value);
 status process_command_word(file_context *src, char *p_line, char *first_param, char *second_param);
 
-symbol* add_symbol(file_context *src, const char* label, int address);
-symbol* find_symbol(const char* label);
 
-void free_global_data_and_symbol();
+symbol* find_symbol(const char* label);
+symbol* add_symbol(file_context *src, const char* label, int address);
+
 void cleanup(file_context **src);
+void free_global_data_and_symbol();
+
 
 int is_label(const char *label);
 int is_dot_directive(const char *word, const char *directive);
