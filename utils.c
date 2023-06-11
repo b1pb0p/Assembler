@@ -149,6 +149,29 @@ size_t get_word(char **ptr, char *word) {
 }
 
 /**
+ * Pushes the pointer back to the beginning of the previous word, accounting for unknown spaces or tabs.
+ * If the previous word contains spaces or tabs, it goes back to the first character of the word.
+ *
+ * @param ptr The pointer to the input string. It will be updated to point to the previous word.
+ * @param word_length The length of the previous word.
+ * @param line The input line as a string.
+ */
+void unget_word(char **ptr, size_t word_length, char *line) {
+    if (word_length > 0) {
+        *ptr -= word_length;
+        while (word_length > 0 && (isspace((int)(*ptr)[-1]) || (*ptr)[-1] == '\t')) {
+            (*ptr)--;
+            word_length--;
+        }
+        while (word_length > 0 && (*ptr)[-1] != '\0' && (*ptr)[-1] != '\n') {
+            (*ptr)--;
+            word_length--;
+        }
+    }
+}
+
+
+/**
  * Copy a string from source to target and allocate memory for the target
  * according to the source.
  *

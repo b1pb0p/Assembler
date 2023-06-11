@@ -22,16 +22,17 @@ const char *msg[MSG_LEN] = {
         "%s - Missing operand on line %d.",
         "%s - Too many operands on line %d.",
         "%s - Illegal use of operand on line %d.",
-        "%s - Label used before definition on line %d.",
+        "%s - Invalid data call: Invalid value on line %d.",
         "%s - Duplicate label declaration on line %d.",
         "%s - Invalid register used on line %d.",
         "%s - Extraneous text on line %d.",
         "%s - Missing '@' symbol on line %d.",
-        "%s - Missing ';' symbol after label declaration on line %d.",
+        "%s - Missing ':' symbol after label declaration on line %d.",
         "%s - Missing ',' symbol on line %d.",
         "%s - Line too long on line %d. Cannot exceed 80 characters.",
         "%s - Macro too long on line %d. Cannot exceed 31 characters.",
         "%s - Invalid macro name (%s) on line %d.",
+        "%s - Label (%s) cannot start with a digit on line %d",
         "%s - Label (%s) does not exist on line %d.",
         "%s - Invalid label name (%s) on line %d.",
         "%s - Duplicate macro name on line %d.",
@@ -39,8 +40,8 @@ const char *msg[MSG_LEN] = {
         "%s - Missing closing 'endmcro' on line %d.",
         "Preprocessor (%d/%d) - No output file(s) generated - %s.",
         "Preprocessor (%d/%d) - Output file(s) successfully generated - %s.",
-        "First Pass (%d/%d) - Output file(s) successfully generated - %s.",
-        "First Pass (%d/%d) - No output file(s) generated - %s.",
+        "First Pass (%d/%d) - Output file(s) successfully generated - %s.as.",
+        "First Pass (%d/%d) - No output file(s) generated - %s.as.",
         "Assembler process for - %s.as terminated with errors. No output file(s) generated.",
 };
 
@@ -83,21 +84,22 @@ void handle_error(status code, ...) {
             fprintf(stderr, "%s", msg[FAILURE]);
         else if (code < OPEN_FILE)
             fprintf(stderr, msg[code], fc->file_name);
-        else if (code == ERR_LABEL_DOES_NOT_EXIST || code == ERR_INVAL_LABEL) {
-            fncall = va_arg(args, char*);
-            num = va_arg(args, int);
-            fprintf(stderr, msg[code], fc->file_name, fncall ,num);
-        }
-        else if (code == ERR_INVAL_MACRO_NAME) {
+        else if (code >= ERR_INVAL_MACRO_NAME && code <= ERR_INVAL_LABEL) {
             fncall = va_arg(args, char*);
             fprintf(stderr, msg[code], fc->file_name, fncall ,fc->lc);
         }
         else if (code <= ERR_MISSING_ENDMACRO)
             fprintf(stderr, msg[code], fc->file_name, fc->lc);
-        else {
+        else if (code == ERR_FIRST_PASS) {
             num = va_arg(args, int);
             tot = va_arg(args, int);
             fprintf(stderr, msg[code], num, tot, fc->file_name);
+        }
+        else {
+            num = va_arg(args, int);
+            tot = va_arg(args, int);
+            fncall = va_arg(args, char*);
+            fprintf(stderr, msg[code], num, tot, fncall);
         }
         va_end(args);
     }
@@ -129,6 +131,11 @@ void handle_progress(status code, ...) {
             printf("%s", msg[FAILURE]);
         else if (code <= OPEN_FILE)
             printf(msg[code], fc->file_name);
+        else if (code == ERR_FIRST_PASS || code == FIRST_PASS_OK) {
+            num = va_arg(args, int);
+            tot = va_arg(args, int);
+            fprintf(stderr, msg[code], num, tot, fc->file_name);
+        }
         else {
             num = va_arg(args, int);
             tot = va_arg(args, int);

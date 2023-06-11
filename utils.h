@@ -78,20 +78,23 @@ typedef struct {
     int lc; /* Line counter */
 } file_context;
 
-file_context* create_file_context(const char* file_name, char* ext, size_t ext_len, char* mode, status *report);
+
 
 char *strdup(const char *s);
 
 size_t get_word_length(char **ptr);
 size_t get_word(char **ptr, char *word);
 
+status skip_white_spaces(char *line);
 status copy_string(char** target, const char* source);
 status copy_n_string(char** target, const char* source, size_t count);
-status skip_white_spaces(char *line);
 
-directive is_directive(const char* src);
 command is_command(const char* src);
+directive is_directive(const char* src);
 
 void free_file_context(file_context** context);
+void unget_word(char **ptr, size_t word_length, char *line);
 void free_file_context_array(file_context** contexts, int size);
+
+file_context* create_file_context(const char* file_name, char* ext, size_t ext_len, char* mode, status *report);
 #endif
