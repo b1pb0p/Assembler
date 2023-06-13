@@ -24,6 +24,7 @@ const char *msg[MSG_LEN] = {
         "%s - Illegal use of operand on line %d.",
         "%s - Invalid data call: Invalid value on line %d.",
         "%s - Duplicate label declaration on line %d.",
+        "%s - Label defined at the beginning of the extern line is meaningless and will be ignored.",
         "%s - Invalid register used on line %d.",
         "%s - Extraneous text on line %d.",
         "%s - Missing '@' symbol on line %d.",
@@ -35,6 +36,7 @@ const char *msg[MSG_LEN] = {
         "%s - Label (%s) cannot start with a digit on line %d",
         "%s - Label (%s) does not exist on line %d.",
         "%s - Invalid label name (%s) on line %d.",
+        "%s - Invalid command or directive after label declaration, (%s) on line %d.",
         "%s - Duplicate macro name on line %d.",
         "%s - Missing opening 'mcro' on line %d.",
         "%s - Missing closing 'endmcro' on line %d.",
@@ -73,6 +75,17 @@ void handle_error(status code, ...) {
         fncall =  va_arg(args, char *);
         fprintf(stderr, "TERMINATED ->\t");
         fprintf(stderr, msg[code], fncall);
+        va_end(args);
+    }
+    else if (code == ERR_MEANINGLESS_LABEL) {
+        va_start(args, code);
+        fc = va_arg(args, file_context*);
+
+        if (!fc)
+            fprintf(stderr, "%s", msg[FAILURE]);
+
+        fprintf(stderr, "WARNING ->\t");
+        fprintf(stderr, msg[code], fc->file_name);
         va_end(args);
     }
     else {

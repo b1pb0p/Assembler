@@ -15,7 +15,8 @@ typedef enum {
     REG_DEST,
     REG_SRC,
     REG_REG,
-    ADDRESS
+    ADDRESS,
+    VALUE
 } concat_actions;
 
 typedef struct {
@@ -25,11 +26,6 @@ typedef struct {
     int is_missing_info;
 } symbol;
 
-typedef union {
-    long decimal_value;
-    char character;
-} data_value;
-
 typedef struct {
     char* binary_src;
     char* binary_opcode;
@@ -38,7 +34,7 @@ typedef struct {
     char* base64_word;
 
     concat_actions concat;
-    data_value value;
+    int value;
     symbol *symbol_t;
 
     int missing_info;
@@ -61,6 +57,6 @@ status is_legal_addressing(command cmd, addressing_modes src, addressing_modes d
 
 data_image* create_data_image(int lc);
 
-addressing_modes get_addressing_mode(const char *src);
+addressing_modes get_addressing_mode(file_context *src, const char *word);
 
 #endif

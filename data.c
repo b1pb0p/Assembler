@@ -50,6 +50,11 @@ char* decimal_to_binary12(int decimal) {
             "000000001111"
     };
 
+    if (!binary) {
+        handle_error(ERR_MEM_ALLOC);
+        return NULL;
+    }
+
     if (decimal >= 0 && decimal <= 15) {
         strcpy(binary, lookup_bin[decimal]);
         return binary;
@@ -92,9 +97,18 @@ char* decimal_to_binary12(int decimal) {
  * `length` is greater than the input string length.
  */
 char* truncate_string(const char* input, int length) {
-    unsigned int input_len = strlen(input);
-    unsigned int truncate_len = input_len - length;
-    char* truncated;
+    unsigned int input_len, truncate_len;
+    char* truncated = NULL;
+
+    if (!input) {
+        if (!(truncated = calloc(length + 1, sizeof(char ))))
+            handle_error(ERR_MEM_ALLOC);
+        return truncated;
+    }
+
+    input_len = strlen(input);
+    truncate_len = input_len - length;
+
     if (length >= input_len) {
         handle_error(TERMINATE, "truncate_string()");
         return NULL;
@@ -188,6 +202,8 @@ status create_base64_word(data_image* data) {
         report = concat_reg_reg(data, &binary_word);
     else if (data->concat == ADDRESS)
         report = concat_address(data, &binary_word);
+    else if (data->concat == VALUE)
+        report = (binary_word = decimal_to_binary12(data->value)) ? NO_ERROR : FAILURE;
     else
         handle_error(TERMINATE, "concatenate_and_convert_to_base64() (Invalid concat action)");
 
@@ -203,7 +219,7 @@ status create_base64_word(data_image* data) {
 }
 
 /**
- * Creates a new data image with the specified location counter (lc).
+ * Creates and initializes a new data image with the specified location counter (lc).
  *
  * @param lc The location counter value for the data image.
  * @return A pointer to the newly created data image, or NULL if memory allocation fails.
@@ -214,7 +230,19 @@ data_image* create_data_image(int lc) {
         handle_error(ERR_MEM_ALLOC);
         return NULL;
     }
+
+    p_ret->binary_src = NULL;
+    p_ret->binary_opcode = NULL;
+    p_ret->binary_dest = NULL;
+    p_ret->base64_word = NULL;
+
+    p_ret->concat = DEFAULT_12BIT;
+    p_ret->value = 0;
+    p_ret->symbol_t  = NULL;
+
+    p_ret->missing_info = 0;
     p_ret->lc = lc;
+
     return p_ret;
 }
 
@@ -226,7 +254,7 @@ data_image* create_data_image(int lc) {
  * @return The status of the concatenation operation. Returns NO_ERROR if successful, or FAILURE if an error occurs.
  */
 status concat_default_12bit(data_image* data, char** binary_word) {
-    char *src_op, *opcode, *dest_op, *a_r_e;
+    char *src_op = NULL, *opcode = NULL, *dest_op = NULL, *a_r_e = NULL;
     status report = NO_ERROR;
 
     src_op = truncate_string(data->binary_src, SRC_DEST_OP_BINARY_LEN);
@@ -258,7 +286,7 @@ status concat_default_12bit(data_image* data, char** binary_word) {
  * @return The status of the concatenation operation. Returns NO_ERROR if successful, or FAILURE if an error occurs.
  */
 status concat_reg_dest(data_image* data, char** binary_word) {
-    char *dest_op;
+    char *dest_op = NULL;
     status report = NO_ERROR;
 
     dest_op = truncate_string(data->binary_dest, SRC_DEST_OP_BINARY_LEN);
@@ -285,7 +313,7 @@ status concat_reg_dest(data_image* data, char** binary_word) {
  * @return The status of the concatenation operation. Returns NO_ERROR if successful, or FAILURE if an error occurs.
  */
 status concat_reg_src(data_image* data, char** binary_word) {
-    char *src_op;
+    char *src_op = NULL;
     status report = NO_ERROR;
 
     src_op = truncate_string(data->binary_src, REGISTER_BINARY_LEN);
@@ -313,7 +341,7 @@ status concat_reg_src(data_image* data, char** binary_word) {
  * @return The status of the concatenation operation. Returns NO_ERROR if successful, or FAILURE if an error occurs.
  */
 status concat_reg_reg(data_image* data, char** binary_word) {
-    char *src_op, *dest_op;
+    char *src_op = NULL, *dest_op = NULL;
     status report = NO_ERROR;
 
     src_op = truncate_string(data->binary_src, REGISTER_BINARY_LEN);
@@ -343,7 +371,7 @@ status concat_reg_reg(data_image* data, char** binary_word) {
  * @return The status of the concatenation operation. Returns NO_ERROR if successful, or FAILURE if an error occurs.
  */
 status concat_address(data_image* data, char** binary_word) {
-    char *src_op, *a_r_e;
+    char *src_op = NULL, *a_r_e = NULL;
     status report = NO_ERROR;
 
     src_op = truncate_string(data->binary_src, ADDRESS_BINARY_LEN);
@@ -366,7 +394,7 @@ status concat_address(data_image* data, char** binary_word) {
 /**
  * Determines the addressing mode based on the input source string.
  *
- * @param src The input source string to analyze.
+ * @param word The input source string to analyze.
  * @return The addressing mode determined based on the source string.
  *         Possible return values are:
  *         - REGISTER: If the source string starts with '@'.
@@ -374,17 +402,22 @@ status concat_address(data_image* data, char** binary_word) {
  *         - INDIRECT: If the source string starts with an alphabetic character.
  *         - INVALID: If the source string does not match any addressing mode.
  */
-addressing_modes get_addressing_mode(const char *src) {
-    if (*src == REGISTER_CH)
+addressing_modes get_addressing_mode(file_context *src, const char *word) {
+    if (*word == REGISTER_CH) {
+        if (is_valid_register(word))
+            return REGISTER;
+        handle_error(ERR_INVAL_REGISTER, src);
+        return INVALID;
+    }
         return REGISTER;
 
-    if (*src == '+' || *src == '-')
-        src++;
+    if (*word == '+' || *word == '-')
+        word++;
 
-    if (isdigit(*src))
+    if (isdigit(*word))
         return DIRECT;
 
-    if (isalpha(*src))
+    if (isalpha(*word))
         return INDIRECT;
 
     handle_error(TERMINATE, "get_addressing_mode()");
