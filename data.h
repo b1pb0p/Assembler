@@ -53,10 +53,10 @@ void free_data_image_array(data_image ***data_array, size_t *size);
 void free_strings(int num_strings, ...);
 
 status create_base64_word(data_image* data);
-status is_legal_addressing(command cmd, addressing_modes src, addressing_modes dest);
+status is_legal_addressing(Command cmd, Addressing_modes src, Addressing_modes dest);
 
 data_image* create_data_image(int lc);
 
-addressing_modes get_addressing_mode(file_context *src, const char *word);
+Addressing_modes get_addressing_mode(file_context *src, const char *word);
 
 #endif

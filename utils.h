@@ -14,7 +14,6 @@
 #define MAX_LABEL_LENGTH 32 /*  31 + '\0' */
 #define DIRECTIVE_LEN 4
 #define COMMANDS_LEN 16
-#define STARTING_ADDRESS 100
 #define MAX_BUFFER_LENGTH 256
 
 #define FILE_MODE_READ "r"
@@ -35,22 +34,22 @@ typedef enum {
 } ARE;
 
 typedef enum {
-    DATA,
+    DATA = 1,
     STRING,
     ENTRY,
     EXTERN,
     DEFAULT /* Added field to indicate it belongs to the current file */
-} directive;
+} Directive;
 
 typedef enum {
     DIRECT = 1,
     INDIRECT = 3,
     REGISTER = 5,
     INVALID = -1
-} addressing_modes;
+} Addressing_modes;
 
 typedef enum {
-    MOV,
+    MOV = 1,
     CMP,
     ADD,
     SUB,
@@ -66,8 +65,13 @@ typedef enum {
     JSR,
     RTS,
     STOP
-} command;
+} Command;
 
+typedef enum {
+    NORMAL,
+    COMMA,
+    COLON
+} Delimiter;
 
 typedef struct {
     FILE* file_ptr;
@@ -83,14 +87,14 @@ typedef struct {
 char *strdup(const char *s);
 
 size_t get_word_length(char **ptr);
-size_t get_word(char **ptr, char *word);
+size_t get_word(char **ptr, char *word, Delimiter delimiter);
 
 status skip_white_spaces(char *line);
 status copy_string(char** target, const char* source);
 status copy_n_string(char** target, const char* source, size_t count);
 
-command is_command(const char* src);
-directive is_directive(const char* src);
+Command is_command(const char* src);
+Directive is_directive(const char* src);
 
 void free_file_context(file_context** context);
 void unget_word(char **ptr, size_t word_length, char *line);

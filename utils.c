@@ -126,24 +126,38 @@ size_t get_word_length(char **ptr) {
 
 /**
  * Extracts the next word from the input string pointed to by 'ptr'.
- * It will be updated to point to the next character after the extracted word.
+ * The word is delimited by whitespace or a specific delimiter character.
+ * It will update 'ptr' to point to the next character after the extracted word.
  *
  * @param ptr The pointer to the input string.
  * @param word The buffer to store the extracted word.
+ * @param delimiter The delimiter character to use for word extraction (COMMA, COLON, or NORMAL for whitespace delimiter).
  * @return The length of the extracted word.
  */
-size_t get_word(char **ptr, char *word) {
+size_t get_word(char **ptr, char *word, Delimiter delimiter) {
     size_t length = 0;
 
-    while (**ptr && isspace((int)**ptr)) {
+    while (**ptr && isspace((int)**ptr))
         (*ptr)++;
-    }
-    while (**ptr && !isspace((int)**ptr)) {
+
+    char targetDelimiter;
+    if (delimiter == COMMA)
+        targetDelimiter = ',';
+    else if (delimiter == COLON)
+        targetDelimiter = ':';
+    else
+        targetDelimiter = ' ';
+
+    while (**ptr && **ptr != targetDelimiter && !isspace((int)**ptr)) {
         word[length] = **ptr;
         (*ptr)++;
         length++;
     }
+
     word[length] = '\0';
+
+    if (**ptr == targetDelimiter)
+        (*ptr)++;
 
     return length;
 }
@@ -255,32 +269,32 @@ status skip_white_spaces(char *line) {
 }
 
 /**
- * Checks if a given string is a valid directive.
+ * Checks if a given string is a valid Directive.
  *
  * @param src The string to check.
- * @return The corresponding directive index if the string is a valid directive, otherwise 0.
+ * @return The corresponding Directive index if the string is a valid Directive, otherwise DEFAULT.
  */
-directive is_directive(const char* src) {
+Directive is_directive(const char* src) {
     int i;
     if (src)
         for (i = 0; i < DIRECTIVE_LEN; i++)
             if (strcmp(src, directives[i]) == 0)
-                return i; /* Corresponding directive*/
+                return i + 1; /* Corresponding Directive*/
     return 0;
 }
 
 /**
- * Checks if a given string is a valid command.
+ * Checks if a given string is a valid Command.
  *
  * @param src The string to check.
- * @return The corresponding command index if the string is a valid command, otherwise 0.
+ * @return The corresponding Command index if the string is a valid Command, otherwise 0.
  */
-command is_command(const char* src) {
+Command is_command(const char* src) {
     int i;
     if (src)
         for (i = 0; i < COMMANDS_LEN; i++)
             if (strcmp(src, commands[i]) == 0)
-                return i; /* Corresponding command*/
+                return i + 1; /* Corresponding Command*/
     return 0;
 }
 

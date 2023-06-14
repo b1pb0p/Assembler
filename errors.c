@@ -36,11 +36,11 @@ const char *msg[MSG_LEN] = {
         "%s - Label (%s) cannot start with a digit on line %d",
         "%s - Label (%s) does not exist on line %d.",
         "%s - Invalid label name (%s) on line %d.",
-        "%s - Invalid command or directive after label declaration, (%s) on line %d.",
+        "%s - Invalid Command or Directive after label declaration, (%s) on line %d.",
         "%s - Duplicate macro name on line %d.",
         "%s - Missing opening 'mcro' on line %d.",
         "%s - Missing closing 'endmcro' on line %d.",
-        "Preprocessor (%d/%d) - No output file(s) generated - %s.",
+        "Preprocessor (%d/%d) - No output file(s) generated - %s.as.",
         "Preprocessor (%d/%d) - Output file(s) successfully generated - %s.",
         "First Pass (%d/%d) - Output file(s) successfully generated - %s.as.",
         "First Pass (%d/%d) - No output file(s) generated - %s.as.",
@@ -62,40 +62,34 @@ void handle_error(status code, ...) {
     int num, tot;
     char *fncall;
 
-    if (code == NO_ERROR) {
-        printf("TERMINATED ->\t");
-        printf("%s\n", msg[code]);
-    }
-    else if (code == FAILURE) {
-        fprintf(stderr, "TERMINATED ->\t");
-        fprintf(stderr, "%s", msg[code]);
-    }
+    va_start(args, code);
+
+    if (code == NO_ERROR)
+        printf("TERMINATED ->\t%s\n", msg[code]);
+    else if (code == FAILURE)
+        fprintf(stderr, "TERMINATED ->\t%s", msg[code]);
     else if (code == TERMINATE || code == ERR_FOUND_ASSEMBLER) {
-        va_start(args, code);
         fncall =  va_arg(args, char *);
         fprintf(stderr, "TERMINATED ->\t");
         fprintf(stderr, msg[code], fncall);
-        va_end(args);
     }
     else if (code == ERR_MEANINGLESS_LABEL) {
-        va_start(args, code);
         fc = va_arg(args, file_context*);
-
-        if (!fc)
-            fprintf(stderr, "%s", msg[FAILURE]);
-
         fprintf(stderr, "WARNING ->\t");
         fprintf(stderr, msg[code], fc->file_name);
-        va_end(args);
+    }
+    else if (code == ERR_PRE || code == ERR_FIRST_PASS) {
+        fprintf(stderr, "ERROR ->\t");
+        num = va_arg(args, int);
+        tot = va_arg(args, int);
+        fncall = va_arg(args, char*);
+        fprintf(stderr, msg[code], num, tot, fncall);
     }
     else {
         fprintf(stderr, "ERROR ->\t");
-        /* Error messages that require additional arguments */
-        va_start(args, code);
         fc = va_arg(args, file_context*);
-        if (!fc)
-            fprintf(stderr, "%s", msg[FAILURE]);
-        else if (code < OPEN_FILE)
+
+        if (code < OPEN_FILE)
             fprintf(stderr, msg[code], fc->file_name);
         else if (code >= ERR_INVAL_MACRO_NAME && code <= ERR_INVAL_LABEL) {
             fncall = va_arg(args, char*);
@@ -103,19 +97,8 @@ void handle_error(status code, ...) {
         }
         else if (code <= ERR_MISSING_ENDMACRO)
             fprintf(stderr, msg[code], fc->file_name, fc->lc);
-        else if (code == ERR_FIRST_PASS) {
-            num = va_arg(args, int);
-            tot = va_arg(args, int);
-            fprintf(stderr, msg[code], num, tot, fc->file_name);
-        }
-        else {
-            num = va_arg(args, int);
-            tot = va_arg(args, int);
-            fncall = va_arg(args, char*);
-            fprintf(stderr, msg[code], num, tot, fncall);
-        }
-        va_end(args);
     }
+    va_end(args);
     fprintf(stderr, "\n");
 }
 

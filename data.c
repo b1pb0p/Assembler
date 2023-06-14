@@ -234,6 +234,7 @@ data_image* create_data_image(int lc) {
     p_ret->binary_src = NULL;
     p_ret->binary_opcode = NULL;
     p_ret->binary_dest = NULL;
+    p_ret->binary_a_r_e = NULL;
     p_ret->base64_word = NULL;
 
     p_ret->concat = DEFAULT_12BIT;
@@ -402,7 +403,7 @@ status concat_address(data_image* data, char** binary_word) {
  *         - INDIRECT: If the source string starts with an alphabetic character.
  *         - INVALID: If the source string does not match any addressing mode.
  */
-addressing_modes get_addressing_mode(file_context *src, const char *word) {
+Addressing_modes get_addressing_mode(file_context *src, const char *word) {
     if (*word == REGISTER_CH) {
         if (is_valid_register(word))
             return REGISTER;
@@ -425,14 +426,14 @@ addressing_modes get_addressing_mode(file_context *src, const char *word) {
 }
 
 /**
- * Checks if the combination of command and addressing modes is legal.
+ * Checks if the combination of Command and addressing modes is legal.
  *
- * @param cmd  The command to check.
+ * @param cmd  The Command to check.
  * @param src  The addressing mode of the source operand.
  * @param dest The addressing mode of the destination operand.
  * @return The status of the operation (NO_ERROR or FAILURE).
  */
-status is_legal_addressing(command cmd, addressing_modes src, addressing_modes dest) {
+status is_legal_addressing(Command cmd, Addressing_modes src, Addressing_modes dest) {
     status error_flag = NO_ERROR;
 
     if (cmd <= SUB || cmd == LEA) {
@@ -448,7 +449,7 @@ status is_legal_addressing(command cmd, addressing_modes src, addressing_modes d
     }
     else if (cmd >= RTS) {
         if (src != INVALID || dest != INVALID) {
-            printf("error this command doesn't take any parameters");
+            printf("error this Command doesn't take any parameters");
             error_flag = FAILURE;
         }
     }

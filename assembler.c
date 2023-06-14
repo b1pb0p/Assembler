@@ -24,31 +24,51 @@ else \
 break;
 
 status preprocess_file(const char* file_name, file_context** dest , int index, int max);
-void free_outs(file_context *** outs, int members); /* TODO: REMOVE */
+
+/** TODO: remove after testing!! */
+void test() {
+    char *lines[3] = {
+            "LENGTH: .data 6,-9,15",
+            "K: .data 22",
+            "MLAB: .data K"
+    };
+    char label[36];
+    int i;
+    size_t size;
+    status code = NO_ERROR;
+    symbol *sym = NULL;
+    file_context *fc = create_file_context("as", ASSEMBLY_EXT, FILE_EXT_LEN, FILE_MODE_READ, &code);
+    for (i = 0; i < 3; i++) {
+        code = NO_ERROR;
+        size = get_word(&lines[i],label,NORMAL);
+        sym = declare_label(fc, label, size);
+        process_line_w_label(fc, lines[i], sym, &code);
+    }
+
+}
+/** TODO: remove after testing!! */
 
 int main(int argc, char *argv[]) {
     int i;
     status report;
-    file_context** outs = NULL;
+    file_context *dest_am = NULL;
 
     if (argc == 1) {
         handle_error(FAILURE);
         exit(FAILURE);
     }
-
-    if (!(outs = malloc(sizeof(file_context*) * (argc - 1)))) {
-        handle_error(ERR_MEM_ALLOC);
-        exit(FAILURE);
-    }
+    test();
+    return 0;
 
     for (i = 1; i < argc; i++) {
-        report = preprocess_file(argv[i], &outs[i - 1], i, argc - 1);
+        report = preprocess_file(argv[i], &dest_am, i, argc - 1);
+        if (report != NO_ERROR && assembler_first_pass(&dest_am))
+            handle_error(ERR_FIRST_PASS, i, argc - 1, argv[i]);
+        else
+            handle_progress(FIRST_PASS_OK, i, argc - 1, argv[i]);
         CHECK_ERROR_CONTINUE(report, argv[i]);
-
     }
 
-
-    free_outs(&outs, argc - 1);
     /* TODO: update goodbye message */
     return 0;
 }
@@ -84,7 +104,7 @@ status preprocess_file(const char* file_name, file_context** dest , int index, i
     if (src) free_file_context(&src);
 
     if (code != NO_ERROR) {
-        handle_error(ERR_PRE, *dest, index, max);
+        handle_error(ERR_PRE, index, max, file_name);
         free_file_context(dest);
         return FAILURE;
     } else {
@@ -92,21 +112,3 @@ status preprocess_file(const char* file_name, file_context** dest , int index, i
         return NO_ERROR;
     }
 }
-
-/* void evaluate_and_proceed(const status* code, file_context*** outs, int members) {
-   if (*code == ERR_MEM_ALLOC || *code == TERMINATE) {
-       free_outs(outs, members);
-       exit(*code);
-   }
-}
- */
-
-void free_outs(file_context *** outs, int members) {
-    int i;
-    if (!*outs) return;
-    for (i = 0; i < members; i++)
-        if (*outs[i]) free_file_context(outs[i]);
-    free(*outs);
-    *outs = NULL;
-}
-

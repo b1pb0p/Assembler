@@ -29,9 +29,9 @@ data_image **data_img_ent = NULL;
 data_image **data_img_ext = NULL;
 
 size_t symbol_count = 0;
-size_t data_img_obj_count = 0;
-size_t data_img_ent_count = 0;
-size_t data_img_ext_count = 0;
+size_t data_arr_obj_index = 0;
+size_t data_arr_ent_index = 0;
+size_t data_arr_ext_index = 0;
 int DC = 0;
 int IC = 0;
 
@@ -47,7 +47,7 @@ status assembler_first_pass(file_context **src) {
 
     /* Checking for comment lines (;), invalid line start and handling too long lines
      * is taken care of at the preprocessor stage. */
-    while (fscanf(p_src->file_ptr, "%[^\n]%*c", line) == 1) {
+    while (fscanf(p_src->file_ptr, "%[^\n]%*c", line) == 1 && report != ERR_MEM_ALLOC) {
         report =  process_line(p_src,line);
         p_src->lc++;
     }
@@ -93,11 +93,11 @@ status process_line(file_context *src, char *p_line) {
     char *first_char = p_line;
     symbol *sym = NULL;
     status report = NO_ERROR;
-    size_t word_len = get_word(&p_line, first_word);
+    size_t word_len = get_word(&p_line, first_word,NORMAL);
 
-    /* New label declaration following a directive or a command */
-    if (is_label(src, first_word) && (sym = declare_label(src, first_word, word_len))) {
-        process_line_w_label(src, sym, &report);
+    /* New label declaration following a Directive or a Command */
+    if (is_label(src, first_word, &report) && (sym = declare_label(src, first_word, word_len))) {
+        process_line_w_label(src, p_line, sym, &report);
     }
 
 
@@ -128,23 +128,28 @@ status process_line(file_context *src, char *p_line) {
     return report;
 }
 
-void process_line_w_label(file_context *src, symbol *sym, status *report) {
+void process_line_w_label(file_context *src,char *line, symbol *sym, status *report) {
     char next_word[MAX_LABEL_LENGTH];
     data_image *p_data_image = NULL;
-    directive dir;
-    command cmd;
+    Directive dir;
+    Command cmd;
+    size_t word_len;
+    int condition;
 
-    if (!(dir = is_directive(next_word + 1) || (cmd = is_command(next_word + 1)))) { /* 1 if for '.' */
+    word_len =  get_word(&line,next_word, NORMAL);
+
+    condition = !word_len || is_label(src, next_word, report) &&!(dir = is_directive(next_word + 1)
+            || (cmd = is_command(next_word + 1)));
+
+    if (condition)  {
         *report = FAILURE;
-        handle_error(ERR_INVAL_ACTION_AFTER_LABEL, src, next_word);
+        handle_error(ERR_INVAL_ACTION_AFTER_LABEL, src, !word_len ? "[End of line]" : next_word);
         return;
     }
 
     p_data_image = add_data_image_default(src, sym->label, sym->address_decimal, report);
-    if (!p_data_image) {
-        *report = FAILURE;
+    if (!p_data_image) /* ERR_MEM_ALLOC is taken care of within add_data_image_default() */
         return;
-    }
 
     if (cmd == RTS || cmd == STOP) {
         p_data_image->binary_opcode = decimal_to_binary12(cmd);
@@ -152,10 +157,11 @@ void process_line_w_label(file_context *src, symbol *sym, status *report) {
     }
     else if (dir == ENTRY || dir == EXTERN) {
         handle_error(ERR_MEANINGLESS_LABEL, src);
-        *report = dir == ENTRY ? process_entry() : process_extern();
+       /* *report = dir == ENTRY ? process_entry() : process_extern(); */
     }
     else if (dir == STRING || dir == DATA)
-        *report = dir == STRING ? process_string() : process_data();
+       /* *report = dir == STRING ? process_string() : process_data(src, sym->label, line); */
+        return;
 }
 
 /**
@@ -168,24 +174,20 @@ void process_line_w_label(file_context *src, symbol *sym, status *report) {
  * @return A pointer to the newly created data image, or NULL in case of errors.
  */
 data_image* add_data_image_default(file_context *src, const char* label, int address, status *report) {
-    symbol* sym = NULL;
+    static size_t data_obj_cap = DEFAULT_DATA_IMAGE_CAP;
+    size_t new_cap = data_obj_cap + DEFAULT_DATA_IMAGE_CAP;
     char *dummy_label = NULL;
-    data_image* new_image = create_data_image(src->lc); /* creates new data_image, setting the lc in which declared */
+    data_image **data_arr = NULL;
+    data_image *new_image = create_data_image(src->lc); /* creates new data_image, setting the lc in which declared */
 
-    if (!new_image) {
+    if (!new_image || (data_obj_cap <= data_arr_obj_index &&
+        realloc(data_arr, (new_cap) * sizeof(data_image *)))) {
         *report = ERR_MEM_ALLOC;
-        handle_error(ERR_MEM_ALLOC);
-        return NULL;
-    }
-
-    if (label && isdigit(*label)) {
-        *report = FAILURE;
-        handle_error(ERR_LABEL_START_DIGIT, src, label);
         return NULL;
     }
 
     if (label)
-        new_image->symbol_t = add_symbol(src, label, address, report);
+        new_image->symbol_t = add_symbol(src, label, address, report); /* updates the address */
     else if (!(dummy_label = create_dummy_label())) {
         *report = ERR_MEM_ALLOC;
         return NULL;
@@ -193,46 +195,77 @@ data_image* add_data_image_default(file_context *src, const char* label, int add
     else
         new_image->symbol_t = add_symbol(src, dummy_label, address, report);
 
-    data_img_obj[data_img_obj_count] = new_image;
-    data_img_obj_count++;
+
+    if (data_arr) {
+        data_img_obj = data_arr;
+        data_obj_cap = new_cap;
+    }
+    data_img_obj[data_arr_obj_index] = new_image;
+    data_arr_obj_index++;
 
     free(dummy_label);
     return new_image;
 }
 
+status process_data(file_context *src, char *label, char *line) {
+    char word[MAX_LABEL_LENGTH];
+    int is_first_value = 0;
+    int value;
+    size_t length;
+    status report;
+
+    while (*line != '\n' && *line != '\0') {
+        length = get_word(&line, word, COMMA);
+
+        if (is_data_valid(word) != NO_ERROR || (!is_first_value && word[length- 1] != ',')) {
+            handle_error(ERR_INVAL_DATA, src);
+            return FAILURE;
+        }
+
+        value = atoi(word); // NOLINT(cert-err34-c)
+        DC++;
+
+        if (label && !is_first_value) {
+            is_first_value = 1;
+            if (!add_data_image_default(src, label, src->lc, &report)) report = FAILURE;
+        }
+        else /* A label can only be associated with the initial value */
+            if (!add_data_image_default(src, NULL, INVALID, &report))
+            report = FAILURE;
+
+        if (report != NO_ERROR)
+            return FAILURE;
+        data_img_obj[data_arr_obj_index]->value = value;
+    }
+    return NO_ERROR;
+}
+
+/**
+ * Checks if the given data value is valid.
+ *
+ * @param word The data value to be checked.
+ * @return The status indicating if the data value is valid or not.
+ *         It returns NO_ERROR if the data value is valid, FAILURE otherwise.
+ */
+status is_data_valid(const char *word) {
+    int error_flag = 0;
+
+    if (word[0] == '\0')
+        error_flag = 1;
+
+    if (!error_flag && word[0] == '+' || word[0] == '-')
+        word++;
+
+    while (!error_flag && *word) {
+        if (!isdigit((unsigned char)*word))
+            error_flag = 1;
+        word++;
+    }
+
+    return error_flag ? FAILURE : NO_ERROR;
+}
 
 
-//status process_data(file_context *src, char *label, char *line) {
-//    char word[MAX_LABEL_LENGTH];
-//    int is_first_value = 0;
-//    int value;
-//    status report;
-//
-//    while (*line != '\n' && *line != '\0') {
-//        (void)get_word(&line, word);
-//
-//        if (is_data_valid(word) != NO_ERROR) {
-//            handle_error(ERR_INVAL_DATA, src);
-//            return FAILURE;
-//        }
-//
-//        value = atoi(word); // NOLINT(cert-err34-c)
-//        DC++;
-//
-//        if (label && !is_first_value) {
-//            is_first_value = 1;
-//            if (!add_data_image_default(src, label, src->lc, &report)) report = FAILURE;
-//        }
-//        else /* A label can only be associated with the initial value */
-//            if (!add_data_image_default(src, NULL, INVALID, &report))
-//            report = FAILURE;
-//
-//        if (report != NO_ERROR)
-//            return FAILURE;
-//        data_img_obj[data_img_obj_count]->value = value;
-//    }
-//    return NO_ERROR;
-//}
 
 //status process_entry(file_context *src, char *label, char *line) {
 //    char word[MAX_LABEL_LENGTH];
@@ -266,14 +299,14 @@ data_image* add_data_image_default(file_context *src, const char* label, int add
 //}
 
 /**
- * Checks if a word is a dot directive, such as '.data', '.string', etc.
+ * Checks if a word is a dot Directive, such as '.data', '.string', etc.
  *
  * @param word The word to check.
- * @param directive The specific dot directive string to compare with.
- * @return 1 if the word is a dot directive, 0 otherwise.
+ * @param directive The specific dot Directive string to compare with.
+ * @return 1 if the word is a dot Directive, 0 otherwise.
  */
-//int is_dot_directive(const char *word, const char *directive) {
-//    if (word && *word == '.' && strcmp(word + 1, directive) == 0 && *(word + 1 + strlen(directive)) == '\0')
+//int is_dot_directive(const char *word, const char *Directive) {
+//    if (word && *word == '.' && strcmp(word + 1, Directive) == 0 && *(word + 1 + strlen(Directive)) == '\0')
 //        return 1;
 //    return 0;
 //}
@@ -285,45 +318,33 @@ data_image* add_data_image_default(file_context *src, const char* label, int add
  * @param src A file_context pointer.
  * @return 1 if the string is a valid label, 0 otherwise.
  */
-int is_label(file_context *src, const char *label) {
+status is_valid_label(const char *label) {
     size_t length = strlen(label);
-    if (length == 0 || length > MAX_LABEL_LENGTH)
-        return 0;
-    if (is_command(label) || is_directive(label) || isdigit(*label)) {
-        handle_error(ERR_INVAL_LABEL, src, label);
-        return 0;
-    }
-    if (label[length - 1] == ':') /* TODO: TEST! */
+    if (!label || length == 0 || length > MAX_LABEL_LENGTH ||
+        is_command(label) || is_directive(label + 1))
+        return FAILURE;
+
+    if (isdigit(*label))
+        return  ERR_LABEL_START_DIGIT;
+    if (label[length - 1] == ':')
+        return NO_ERROR;
+
+    return ERR_MISS_COLON;
+}
+
+int is_label(file_context *src, const char *label, status *report) {
+    status ret_val = is_valid_label(label);
+
+    if (report && ret_val != FAILURE) { /* do not print error messages */
+        *report = ret_val;
+        if (ret_val == ERR_LABEL_START_DIGIT)
+            handle_error(ret_val, src);
+        else if (ret_val == ERR_MISS_COLON)
+            handle_error(ERR_MISS_COLON,src);
         return 1;
-
-    handle_error(ERR_MISS_COLON,src);
-
+    }
     return 0;
 }
-/**
- * Checks if the given data value is valid.
- *
- * @param word The data value to be checked.
- * @return The status indicating if the data value is valid or not.
- *         It returns NO_ERROR if the data value is valid, FAILURE otherwise.
- */
-//status is_data_valid(const char *word) {
-//    int error_flag = 0;
-//
-//    if (word[0] == '\0')
-//        error_flag = 1;
-//
-//    if (!error_flag && word[0] == '+' || word[0] == '-')
-//        word++;
-//
-//    while (!error_flag && *word) {
-//        if (!isdigit((unsigned char)*word))
-//            error_flag = 1;
-//        word++;
-//    }
-//
-//    return error_flag ? FAILURE : NO_ERROR;
-//}
 
 symbol *declare_label(file_context *src, const char *label, size_t label_len) {
     char clean_label[MAX_LABEL_LENGTH];
@@ -347,12 +368,12 @@ symbol *declare_label(file_context *src, const char *label, size_t label_len) {
 //        (void)get_word(&p_line, second_param);
 //
 //        if (*p_line != '\n' && *p_line != '\0') {
-//            handle_error(TERMINATE, "Invalid command format");
+//            handle_error(TERMINATE, "Invalid Command format");
 //            return FAILURE;
 //        }
 //    } else {
 //        if (*p_line != '\n' && *p_line != '\0') {
-//            handle_error(TERMINATE, "Invalid command format");
+//            handle_error(TERMINATE, "Invalid Command format");
 //            return FAILURE;
 //        }
 //    }
@@ -360,52 +381,6 @@ symbol *declare_label(file_context *src, const char *label, size_t label_len) {
 //    return NO_ERROR;
 //}
 /*** UP HERE BUDDY ***/
-
-/**
- * Add a new data image to the appropriate global data image array based on the directive.
- *
- * @param src The file context containing input and output file information.
- * @param label The label associated with the data image (optional).
- * @param dir The directive indicating the type of data image (DEFAULT, EXTERN, or ENTRY).
- * @return The status of the operation (NO_ERROR or FAILURE).
- */
-//data_image* add_data_image(file_context *src, const char* label, directive dir) {
-//    symbol* sym = NULL;
-//    data_image* new_image = create_data_image(src->lc);
-//
-//    if (!new_image)
-//        return NULL;
-//
-//    if (label) {
-//        sym = find_symbol(label);
-//        if (sym) {
-//            new_image->symbol_t = sym;
-//        }
-//        if (dir == DEFAULT)
-//            add_symbol(src, label, src->lc + STARTING_ADDRESS);
-//        else
-//            add_symbol(src, label, );
-//    }
-//
-//
-//    if (dir == DEFAULT) {
-//        data_img_obj[data_img_obj_count] = new_image;
-//        data_img_obj_count++;
-//    } else if (dir == EXTERN) {
-//        data_img_ext[data_img_ext_count] = new_image;
-//        data_img_ext_count++;
-//    } else if (dir == ENTRY) {
-//        data_img_ent[data_img_ent_count] = new_image;
-//        data_img_ent_count++;
-//    }
-//    else {
-//        handle_error(TERMINATE, "add_data_image()");
-//        free_data_image(&new_image);
-//        return NULL;
-//    }
-//    return new_image;
-//}
-
 
 /**
 * Generates the output file for the object code.
@@ -427,7 +402,7 @@ status generate_obj_output(const char *file_name, size_t ic, size_t dc) {
 
     fprintf(obj_file->file_ptr, "%lu %lu\n", (unsigned long)ic, (unsigned long)dc);
 
-    for (i = 0; i < data_img_obj_count; i++) {
+    for (i = 0; i < data_arr_obj_index; i++) {
         if ((*data_img_obj[i]).missing_info)
             report = FAILURE;
 
@@ -449,17 +424,17 @@ status generate_obj_output(const char *file_name, size_t ic, size_t dc) {
  *
  * @param file_name The name of the output file.
  * @param ext The file extension for the output file.
- * @param target The target directive (ENTRY or EXTERN).
+ * @param target The target Directive (ENTRY or EXTERN).
  * @return The status of the operation. Returns NO_ERROR on success, or FAILURE if an error occurred.
  */
-status generate_directive_output(const char *file_name, char *ext, directive target) {
+status generate_directive_output(const char *file_name, char *ext, Directive target) {
     status report = NO_ERROR;
     size_t i, boundary;
     data_image **p_data = NULL;
     symbol *p_sym = NULL;
     file_context *dest = create_file_context(file_name, ext, FILE_EXT_LEN_OUT, FILE_MODE_WRITE, &report);
 
-    boundary = target == EXTERN ? data_img_ext_count : data_img_ent_count;
+    boundary = target == EXTERN ? data_arr_ext_index : data_arr_ent_index;
     p_data = target == EXTERN ? data_img_ext : data_img_ent;
 
     if (!dest)
@@ -480,9 +455,9 @@ status generate_directive_output(const char *file_name, char *ext, directive tar
  * Frees the global data image arrays and symbol table.
  */
 void free_global_data_and_symbol() {
-    free_data_image_array(&data_img_obj, &data_img_obj_count);
-    free_data_image_array(&data_img_ent, &data_img_ent_count);
-    free_data_image_array(&data_img_ext, &data_img_ext_count);
+    free_data_image_array(&data_img_obj, &data_arr_obj_index);
+    free_data_image_array(&data_img_ent, &data_arr_ent_index);
+    free_data_image_array(&data_img_ext, &data_arr_ext_index);
     free_symbol_table(&symbol_table, &symbol_count);
 }
 
