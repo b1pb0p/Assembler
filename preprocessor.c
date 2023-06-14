@@ -157,7 +157,7 @@ status handle_macro_start(file_context *src, char *line, int *found_macro,
                     report = FAILURE;
             }
 
-            if ((inval = is_directive(word))) {
+            if ((inval = is_directive(word + 1))) {
                 handle_error(ERR_INVAL_MACRO_NAME, src, directives[inval - 1]);
                 report = FAILURE;
             }

@@ -131,17 +131,17 @@ status process_line(file_context *src, char *p_line) {
 void process_line_w_label(file_context *src,char *line, symbol *sym, status *report) {
     char next_word[MAX_LABEL_LENGTH];
     data_image *p_data_image = NULL;
-    Directive dir;
-    Command cmd;
-    size_t word_len;
-    int condition;
+    Directive dir = 0;
+    Command cmd = 0;
+    size_t word_len = 0;
+    int condition= 0 ;
 
     word_len =  get_word(&line,next_word, NORMAL);
 
-    condition = !word_len || is_label(src, next_word, report) &&!(dir = is_directive(next_word + 1)
-            || (cmd = is_command(next_word + 1)));
+    condition = word_len && !is_label(src, next_word, NULL) &&
+            ((dir = is_directive(next_word + 1) || (cmd = is_command(next_word ))));
 
-    if (condition)  {
+    if (!condition)  {
         *report = FAILURE;
         handle_error(ERR_INVAL_ACTION_AFTER_LABEL, src, !word_len ? "[End of line]" : next_word);
         return;
@@ -159,9 +159,10 @@ void process_line_w_label(file_context *src,char *line, symbol *sym, status *rep
         handle_error(ERR_MEANINGLESS_LABEL, src);
        /* *report = dir == ENTRY ? process_entry() : process_extern(); */
     }
-    else if (dir == STRING || dir == DATA)
-       /* *report = dir == STRING ? process_string() : process_data(src, sym->label, line); */
-        return;
+    else if (dir == STRING || dir == DATA) {
+        DC++;
+        /* *report = dir == STRING ? process_string() : process_data(src, sym->label, line); */
+    }
 }
 
 /**
@@ -174,14 +175,14 @@ void process_line_w_label(file_context *src,char *line, symbol *sym, status *rep
  * @return A pointer to the newly created data image, or NULL in case of errors.
  */
 data_image* add_data_image_default(file_context *src, const char* label, int address, status *report) {
-    static size_t data_obj_cap = DEFAULT_DATA_IMAGE_CAP;
+    static size_t data_obj_cap = 0;
     size_t new_cap = data_obj_cap + DEFAULT_DATA_IMAGE_CAP;
     char *dummy_label = NULL;
     data_image **data_arr = NULL;
     data_image *new_image = create_data_image(src->lc); /* creates new data_image, setting the lc in which declared */
 
     if (!new_image || (data_obj_cap <= data_arr_obj_index &&
-        realloc(data_arr, (new_cap) * sizeof(data_image *)))) {
+        !(data_arr = realloc(data_img_obj, (new_cap) * sizeof(data_image *))))) {
         *report = ERR_MEM_ALLOC;
         return NULL;
     }
@@ -485,6 +486,8 @@ symbol* add_symbol(file_context *src, const char* label, int address, status *re
     if (existing_symbol) {
         if (existing_symbol->is_missing_info && address != INVALID_ADDRESS)
             update_symbol_info(existing_symbol, address);
+        else if (existing_symbol->address_decimal == address)
+            return existing_symbol;
         else {
             handle_error(ERR_DUP_LABEL, src);
             *report = ERR_DUP_LABEL;
