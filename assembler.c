@@ -26,14 +26,11 @@ break;
 status preprocess_file(const char* file_name, file_context** dest , int index, int max);
 
 /** TODO: remove after testing!! */
-#define number_of_lines 5
+#define number_of_lines 2
 void test() {
     char *lines[number_of_lines] = {
-            "LENGTH: .data 6,-9,15",
-            "K: .data 22",
-            "MLAB: .data K",
-            "LENGTH: this should raise an error, several actually", /* TODO: EXTRA ERROR */
-            "MASK: stop"
+            "MAIN: mov @r3 ,LENGTH",
+            "LENGTH: .data 6,-9,15"
     };
     char label[36];
     int i;
@@ -44,7 +41,7 @@ void test() {
     for (i = 0; i < number_of_lines; i++) {
         code = NO_ERROR;
         size = get_word(&lines[i],label,NORMAL);
-        sym = declare_label(fc, label, size);
+        sym = declare_label(fc, label, size, &code);
         process_line_w_label(fc, lines[i], sym, &code);
     }
 
@@ -60,8 +57,8 @@ int main(int argc, char *argv[]) {
         handle_error(FAILURE);
         exit(FAILURE);
     }
-//    test();
-//    return 0;
+    test();
+    return 0;
 
     for (i = 1; i < argc; i++) {
         report = preprocess_file(argv[i], &dest_am, i, argc - 1);
