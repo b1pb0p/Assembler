@@ -189,7 +189,7 @@ status create_base64_word(data_image* data) {
         return FAILURE;
     }
 
-    if (data->missing_info)
+    if (!data->is_word_complete)
         return NO_ERROR; /* TODO: check ; To not trigger any false alarm, will be handled in the second pass */
 
     if (data->concat == DEFAULT_12BIT)
@@ -239,9 +239,8 @@ data_image* create_data_image(int lc) {
 
     p_ret->concat = DEFAULT_12BIT;
     p_ret->value = 0;
-    p_ret->symbol_t  = NULL;
 
-    p_ret->missing_info = 0;
+    p_ret->is_word_complete = 0;
     p_ret->lc = lc;
 
     return p_ret;
@@ -487,6 +486,11 @@ void free_symbol(symbol** symbol_t) {
         (*symbol_t)->address_binary = NULL;
     }
 
+    if ((*symbol_t)->data) {
+        free_data_image(&(*symbol_t)->data);
+        (*symbol_t)->data = NULL;
+    }
+
     free(*symbol_t);
     *symbol_t = NULL;
 }
@@ -527,7 +531,6 @@ void free_data_image(data_image** data) {
     if ((*data)->binary_dest) free((*data)->binary_dest);
     if ((*data)->binary_a_r_e) free((*data)->binary_a_r_e);
     if ((*data)->base64_word) free((*data)->base64_word);
-    if ((*data)->symbol_t) free_symbol(&((*data)->symbol_t));
     free(*data);
     *data = NULL;
 }

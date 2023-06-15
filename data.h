@@ -20,13 +20,6 @@ typedef enum {
 } concat_actions;
 
 typedef struct {
-    char *label;
-    char *address_binary;
-    int address_decimal;
-    int is_missing_info;
-} symbol;
-
-typedef struct {
     char* binary_src;
     char* binary_opcode;
     char* binary_dest;
@@ -34,13 +27,23 @@ typedef struct {
     char* base64_word;
 
     concat_actions concat;
-    int value;
-    symbol *symbol_t;
 
-    int missing_info;
+    int is_word_complete;
+    int value;
     int lc;
 
 } data_image;
+
+typedef struct {
+    char *label;
+    char *address_binary;
+
+    int address_decimal;
+    int is_missing_info;
+
+    data_image *data;
+
+} symbol;
 
 char* convert_bin_to_base64(const char* binary);
 char* truncate_string(const char* input, int length);
