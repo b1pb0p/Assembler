@@ -52,7 +52,7 @@ status assembler_first_pass(file_context **src) {
         p_src->lc++;
     }
 
-    /* Generate object output file only if no error occurred */
+    /* Generate output file(s) only if no error has occurred */
     if (report == NO_ERROR)
         report = assembler_second_pass(src);
     else /* Cleanup output files if an error occurred */
@@ -89,42 +89,21 @@ status assembler_second_pass(file_context **src) {
 /*** NEED TO BE WRITTEN AGAIN ***/
 status process_line(file_context *src, char *p_line) {
     char first_word[MAX_LABEL_LENGTH];
-    char next_word[MAX_LABEL_LENGTH];
-    char *first_char = p_line;
+    int is_valid_label_exist;
     symbol *sym = NULL;
     status report = NO_ERROR;
     size_t word_len = get_word(&p_line, first_word,NORMAL);
 
+    is_valid_label_exist = is_label(src, first_word, &report)
+                           && (sym = declare_label(src, first_word, word_len, &report)) && report != ERR_MEM_ALLOC;
+
     /* New label declaration following a Directive or a Command */
-    if (is_label(src, first_word, &report) && (sym = declare_label(src, first_word, word_len))) {
+    if (is_valid_label_exist) {
         process_line_w_label(src, p_line, sym, &report);
     }
-
-
-//    if (is_label(src, first_word)) {
-//        if((report = process_label(src, first_word)))
-//            return report;
-//        if (IS_DATA(next_word)) {
-//            process_data(src, first_word, p_line);
-//        } else if (IS_ENTRY(next_word)) {
-//            return ERR_DUP_LABEL; /* TODO: process_entry(); */
-//        } else if (IS_EXTERN(next_word)) {
-//            return ERR_FIRST_PASS; /* TODO: process_extern(); */
-//        } else if (IS_STRING(next_word))
-//            return NO_ERROR; /* TODO: process_string(); */
-//    }
-//    else {
-//        unget_word(&p_line, word_len, first_char);
-//        if (IS_DATA(first_word))
-//            report = process_data(src, NULL, p_line);
-//        else if (IS_ENTRY(first_word))
-//            return ERR_PRE; /* TODO: process_entry(); */
-//        else if (IS_EXTERN(first_word))
-//            return ERR_EXTRA_TEXT; /* TODO: process_extern(); */
-//        else if (IS_STRING(first_word))
-//            return ERR_LINE_TOO_LONG; /* TODO: process_string(); */
-//    }
-
+    else if (report != ERR_MEM_ALLOC){ /* Process line without any associated label */
+        //process_line_wout_label(src, p_line, &report);
+    }
     return report;
 }
 
@@ -133,13 +112,13 @@ void process_line_w_label(file_context *src,char *line, symbol *sym, status *rep
     data_image *p_data_image = NULL;
     Directive dir = 0;
     Command cmd = 0;
-    size_t word_len = 0;
-    int condition= 0 ;
+    size_t word_len;
+    int condition;
 
     word_len =  get_word(&line,next_word, NORMAL);
 
     condition = word_len && !is_label(src, next_word, NULL) &&
-            ((dir = is_directive(next_word + 1) || (cmd = is_command(next_word ))));
+                ((dir = is_directive(next_word + 1) || (cmd = is_command(next_word))));
 
     if (!condition)  {
         *report = FAILURE;
@@ -147,21 +126,17 @@ void process_line_w_label(file_context *src,char *line, symbol *sym, status *rep
         return;
     }
 
-    p_data_image = add_data_image_default(src, sym->label, sym->address_decimal, report);
-    if (!p_data_image) /* ERR_MEM_ALLOC is taken care of within add_data_image_default() */
-        return;
-
     if (cmd == RTS || cmd == STOP) {
         p_data_image->binary_opcode = decimal_to_binary12(cmd);
         if (!p_data_image->binary_opcode) *report = FAILURE;
     }
     else if (dir == ENTRY || dir == EXTERN) {
         handle_error(ERR_MEANINGLESS_LABEL, src);
-       /* *report = dir == ENTRY ? process_entry() : process_extern(); */
+        /* *report = dir == ENTRY ? process_entry() : process_extern(); */
     }
     else if (dir == STRING || dir == DATA) {
         DC++;
-        /* *report = dir == STRING ? process_string() : process_data(src, sym->label, line); */
+        dir == STRING ? process_string() : process_data(src, sym->label, line, report);
     }
 }
 
@@ -174,10 +149,9 @@ void process_line_w_label(file_context *src,char *line, symbol *sym, status *rep
  * @param report A pointer to a status report variable.
  * @return A pointer to the newly created data image, or NULL in case of errors.
  */
-data_image* add_data_image_default(file_context *src, const char* label, int address, status *report) {
+data_image* add_data_image_default(file_context *src, const char* label, status *report) {
     static size_t data_obj_cap = 0;
     size_t new_cap = data_obj_cap + DEFAULT_DATA_IMAGE_CAP;
-    char *dummy_label = NULL;
     data_image **data_arr = NULL;
     data_image *new_image = create_data_image(src->lc); /* creates new data_image, setting the lc in which declared */
 
@@ -187,15 +161,14 @@ data_image* add_data_image_default(file_context *src, const char* label, int add
         return NULL;
     }
 
-    if (label)
-        new_image->symbol_t = add_symbol(src, label, address, report); /* updates the address */
-    else if (!(dummy_label = create_dummy_label())) {
-        *report = ERR_MEM_ALLOC;
-        return NULL;
+    if (label) {
+        new_image->symbol_t = find_symbol(label); /* Label is always already declared at this point */
+        if (!new_image->symbol_t) {
+            handle_error(TERMINATE, "add_data_image_default()");
+            free_data_image(&new_image);
+            return NULL;
+        }
     }
-    else
-        new_image->symbol_t = add_symbol(src, dummy_label, address, report);
-
 
     if (data_arr) {
         data_img_obj = data_arr;
@@ -204,41 +177,59 @@ data_image* add_data_image_default(file_context *src, const char* label, int add
     data_img_obj[data_arr_obj_index] = new_image;
     data_arr_obj_index++;
 
-    free(dummy_label);
     return new_image;
 }
 
-status process_data(file_context *src, char *label, char *line) {
+void process_data(file_context *src, const char *label, char *line, status *report) {
     char word[MAX_LABEL_LENGTH];
     int is_first_value = 0;
     int value;
     size_t length;
-    status report;
+    status label_stat;
+    symbol *sym = NULL;
+    data_image *p_data = NULL;
 
     while (*line != '\n' && *line != '\0') {
         length = get_word(&line, word, COMMA);
+        label_stat = is_valid_label(word);
 
-        if (is_data_valid(word) != NO_ERROR || (!is_first_value && word[length- 1] != ',')) {
+        if (!length) {
+            *report = ERR_INVAL_DATA;
             handle_error(ERR_INVAL_DATA, src);
-            return FAILURE;
+            return;
         }
-
-        value = atoi(word); // NOLINT(cert-err34-c)
-        DC++;
 
         if (label && !is_first_value) {
             is_first_value = 1;
-            if (!add_data_image_default(src, label, src->lc, &report)) report = FAILURE;
-        }
-        else /* A label can only be associated with the initial value */
-            if (!add_data_image_default(src, NULL, INVALID, &report))
-            report = FAILURE;
+            if ((p_data = add_data_image_default(src, label, report)))
+                p_data->symbol_t->
 
-        if (report != NO_ERROR)
-            return FAILURE;
+        }
+
+        if (is_data_valid_num(word))
+            value = atoi(word); // NOLINT(cert-err34-c)
+        else if (label_stat == ERR_MISS_COLON) {
+            sym = add_symbol(src, word, INVALID, report);
+            if (sym)
+            value = DC;
+        }
+        else {
+            label_stat == NO_ERROR ? handle_error(ERR_FORBIDDEN_LABEL_DECLARE,src) : handle_error(ERR_INVAL_LABEL, src, word);
+            continue;
+        }
+
+        DC++;
+
+
+         /* A label can only be associated with the initial value */
+            if (!add_data_image_default(src, NULL, report))
+                *report = FAILURE;
+
         data_img_obj[data_arr_obj_index]->value = value;
     }
-    return NO_ERROR;
+
+    if (!is_first_value)
+        handle_error(ERR_INVAL_DATA, src);
 }
 
 /**
@@ -248,7 +239,7 @@ status process_data(file_context *src, char *label, char *line) {
  * @return The status indicating if the data value is valid or not.
  *         It returns NO_ERROR if the data value is valid, FAILURE otherwise.
  */
-status is_data_valid(const char *word) {
+int is_data_valid_num(const char *word) {
     int error_flag = 0;
 
     if (word[0] == '\0')
@@ -263,7 +254,7 @@ status is_data_valid(const char *word) {
         word++;
     }
 
-    return error_flag ? FAILURE : NO_ERROR;
+    return !error_flag;
 }
 
 
@@ -323,7 +314,7 @@ status is_valid_label(const char *label) {
     size_t length = strlen(label);
     if (!label || length == 0 || length > MAX_LABEL_LENGTH ||
         is_command(label) || is_directive(label + 1))
-        return FAILURE;
+        return ERR_INVAL_LABEL;
 
     if (isdigit(*label))
         return  ERR_LABEL_START_DIGIT;
@@ -336,20 +327,24 @@ status is_valid_label(const char *label) {
 int is_label(file_context *src, const char *label, status *report) {
     status ret_val = is_valid_label(label);
 
-    if (report && ret_val != FAILURE) { /* do not print error messages */
-        *report = ret_val;
-        if (ret_val == ERR_LABEL_START_DIGIT)
-            handle_error(ret_val, src);
-        else if (ret_val == ERR_MISS_COLON)
-            handle_error(ERR_MISS_COLON,src);
+    if (!report)  /* Do not print error messages if report is NULL */
+        return ret_val == ERR_INVAL_LABEL ? 0 : 1;
+    if (ret_val == NO_ERROR)
         return 1;
+
+    *report = ret_val;
+
+    if (ret_val == ERR_INVAL_LABEL) {
+        handle_error(ERR_INVAL_LABEL, src, label);
+        return 0;
     }
-    return 0;
+
+    ret_val == ERR_MISS_COLON ? handle_error(ret_val,src) : handle_error(ret_val, src, label);
+    return 1;
 }
 
-symbol *declare_label(file_context *src, const char *label, size_t label_len) {
+symbol *declare_label(file_context *src, const char *label, size_t label_len, status *report) {
     char clean_label[MAX_LABEL_LENGTH];
-    status report = NO_ERROR;
 
     if (!strncpy(clean_label, label, label_len - 1)) {
         handle_error(ERR_MEM_ALLOC);
@@ -358,7 +353,7 @@ symbol *declare_label(file_context *src, const char *label, size_t label_len) {
 
     clean_label[label_len - 1] = '\0';
 
-    return add_symbol(src, clean_label, (DC+IC) + ADDRESS_START, &report);;
+    return add_symbol(src, clean_label, (DC+IC) + ADDRESS_START, report);;
 }
 
 //status process_command_word(file_context *src, char *p_line, char *first_param, char *second_param) {
@@ -407,7 +402,7 @@ status generate_obj_output(const char *file_name, size_t ic, size_t dc) {
         if ((*data_img_obj[i]).missing_info)
             report = FAILURE;
 
-        (*data_img_obj[i]).base64_word = convert_bin_to_base64((*data_img_obj)->symbol_t->address_binary);
+       // (*data_img_obj[i]).base64_word = convert_bin_to_base64((*data_img_obj)->symbol_t->address_binary);
         if (!(*data_img_obj[i]).base64_word)
             report = FAILURE;
 
@@ -480,8 +475,6 @@ symbol* add_symbol(file_context *src, const char* label, int address, status *re
     symbol* new_symbol = NULL;
     symbol* existing_symbol = NULL;
     existing_symbol = find_symbol(label);
-
-    *report = NO_ERROR;
 
     if (existing_symbol) {
         if (existing_symbol->is_missing_info && address != INVALID_ADDRESS)
