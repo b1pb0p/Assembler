@@ -25,6 +25,7 @@ const char *msg[MSG_LEN] = {
         "%s - Invalid data call: Invalid value on line %d.",
         "%s - Duplicate label declaration on line %d.",
         "%s - Label defined at the beginning of the extern line is meaningless and will be ignored.",
+        "%s - Label declared in forbidden context on line %d",
         "%s - Invalid register used on line %d.",
         "%s - Extraneous text on line %d.",
         "%s - Missing '@' symbol on line %d.",
