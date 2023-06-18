@@ -406,7 +406,7 @@ Addressing_modes get_addressing_mode(file_context *src, const char *word) {
     if (*word == REGISTER_CH) {
         if (is_valid_register(word))
             return REGISTER;
-        handle_error(ERR_INVAL_REGISTER, src);
+        handle_error(ERR_INVALID_REGISTER, src);
         return INVALID;
     }
         return REGISTER;

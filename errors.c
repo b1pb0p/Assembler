@@ -23,6 +23,7 @@ const char *msg[MSG_LEN] = {
         "%s - Too many operands on line %d.",
         "%s - Illegal use of operand on line %d.",
         "%s - Invalid data call: Invalid value on line %d.",
+        "%s - Excessive comma on line %d.",
         "%s - Duplicate label declaration on line %d.",
         "%s - Label defined at the beginning of the extern line is meaningless and will be ignored.",
         "%s - Label declared in forbidden context on line %d",
@@ -92,7 +93,7 @@ void handle_error(status code, ...) {
 
         if (code < OPEN_FILE)
             fprintf(stderr, msg[code], fc->file_name);
-        else if (code >= ERR_INVAL_MACRO_NAME && code <= ERR_INVAL_LABEL) {
+        else if (code >= ERR_INVAL_MACRO_NAME && code <= ERR_INVALID_LABEL) {
             fncall = va_arg(args, char*);
             fprintf(stderr, msg[code], fc->file_name, fncall ,fc->lc);
         }

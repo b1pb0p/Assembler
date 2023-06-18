@@ -30,6 +30,7 @@ status assembler_second_pass(file_context **src);
 status process_line(file_context *src, char *p_line);
 status update_symbol_info(symbol* existing_symbol, int address);
 status generate_obj_output(const char *file_name, size_t ic, size_t dc);
+status line_parser(file_context *src, char **line, char *word, Delimiter delimiter);
 status generate_directive_output(const char *file_name, char *ext, Directive target);
 status process_command_word(file_context *src, char *p_line, char *first_param, char *second_param);
 

@@ -29,7 +29,7 @@ typedef struct {
     concat_actions concat;
 
     int is_word_complete;
-    int value;
+    int *value;
     int lc;
 
 } data_image;
