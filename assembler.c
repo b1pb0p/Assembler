@@ -26,24 +26,40 @@ break;
 status preprocess_file(const char* file_name, file_context** dest , int index, int max);
 
 /** TODO: remove after testing!! */
-#define number_of_lines 2
+#define number_of_lines 4
 void test() {
+    void test_out();
     char *lines[number_of_lines] = {
-            "MAIN: mov @r3 ,LENGTH",
-            "LENGTH: .data 6,-9,15"
+            "LENGTH: .data XYZ,-9,15",
+            ".data LENGTH,9, 7, 9",
+            "XYZ: .data 51",
+            "XYZ: .data 51"
     };
     char label[36];
+    char temp[36];
     int i;
     size_t size;
     status code = NO_ERROR;
     symbol *sym = NULL;
     file_context *fc = create_file_context("as", ASSEMBLY_EXT, FILE_EXT_LEN, FILE_MODE_READ, &code);
-    for (i = 0; i < number_of_lines; i++) {
-        code = NO_ERROR;
-        size = get_word(&lines[i],label,NORMAL);
-        sym = declare_label(fc, label, size, &code);
-        process_line_w_label(fc, lines[i], sym, &code);
-    }
+
+    code = NO_ERROR;
+    size = get_word(&lines[0], label, SPACE);
+    printf("Processing ... \n %s\n",label);
+    get_word(&lines[0], temp, SPACE);
+    sym = declare_label(fc, label, size, &code);
+    process_data(fc, label, lines[0], &code);
+    printf("\n second line \n");
+    size = get_word(&lines[1], label, SPACE);
+    printf("Processing ... \n %s\n",label);
+    process_data(fc, NULL, lines[1], &code);
+    printf("\n third line \n");
+    size = get_word(&lines[2], label, SPACE);
+    printf("Processing ... \n %s\n",label);
+    get_word(&lines[2], temp, SPACE);
+    sym = declare_label(fc, label, size, &code);
+    process_data(fc, label, lines[2], &code);
+    test_out();
 
 }
 /** TODO: remove after testing!! */
