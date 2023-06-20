@@ -131,7 +131,7 @@ size_t get_word_length(char **ptr) {
  *
  * @param ptr The pointer to the input string.
  * @param word The buffer to store the extracted word.
- * @param delimiter The delimiter character to use for word extraction (COMMA, COLON, or NORMAL for whitespace delimiter).
+ * @param delimiter The delimiter character to use for word extraction (COMMA, COLON, or SPACE for whitespace delimiter).
  * @return The length of the extracted word.
  */
 size_t get_word(char **ptr, char *word, Delimiter delimiter) {
@@ -154,13 +154,17 @@ size_t get_word(char **ptr, char *word, Delimiter delimiter) {
         length++;
     }
 
-    word[length] = '\0';
-
-    if (**ptr == targetDelimiter)
+    if (delimiter != SPACE && **ptr == targetDelimiter) {
+        word[length] = **ptr;
         (*ptr)++;
+        length++;
+    }
+
+    word[length] = '\0';
 
     return length;
 }
+
 
 /**
  * Pushes the pointer back to the beginning of the previous word, accounting for unknown spaces or tabs.

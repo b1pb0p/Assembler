@@ -68,7 +68,7 @@ typedef enum {
 } Command;
 
 typedef enum {
-    NORMAL,
+    SPACE,
     COMMA,
     COLON
 } Delimiter;
