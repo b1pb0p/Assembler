@@ -203,7 +203,7 @@ status create_base64_word(data_image* data) {
     else if (data->concat == ADDRESS)
         report = concat_address(data, &binary_word);
     else if (data->concat == VALUE)
-        report = (binary_word = decimal_to_binary12(data->value)) ? NO_ERROR : FAILURE;
+        report = (binary_word = decimal_to_binary12(*(data->value))) ? NO_ERROR : FAILURE;
     else
         handle_error(TERMINATE, "concatenate_and_convert_to_base64() (Invalid concat action)");
 
@@ -238,7 +238,8 @@ data_image* create_data_image(int lc) {
     p_ret->base64_word = NULL;
 
     p_ret->concat = DEFAULT_12BIT;
-    p_ret->value = 0;
+    p_ret->p_sym = NULL;
+    p_ret->value = NULL;
 
     p_ret->is_word_complete = 0;
     p_ret->lc = lc;
@@ -531,6 +532,8 @@ void free_data_image(data_image** data) {
     if ((*data)->binary_dest) free((*data)->binary_dest);
     if ((*data)->binary_a_r_e) free((*data)->binary_a_r_e);
     if ((*data)->base64_word) free((*data)->base64_word);
+    if ((*data)->p_sym) free((*data)->p_sym);
+    if ((*data)->value) free((*data)->value);
     free(*data);
     *data = NULL;
 }

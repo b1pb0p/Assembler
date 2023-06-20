@@ -19,6 +19,8 @@ typedef enum {
     VALUE
 } concat_actions;
 
+typedef struct symbol symbol;
+
 typedef struct {
     char* binary_src;
     char* binary_opcode;
@@ -27,6 +29,7 @@ typedef struct {
     char* base64_word;
 
     concat_actions concat;
+    symbol *p_sym;
 
     int is_word_complete;
     int *value;
@@ -34,7 +37,7 @@ typedef struct {
 
 } data_image;
 
-typedef struct {
+struct symbol {
     char *label;
     char *address_binary;
 
@@ -42,8 +45,7 @@ typedef struct {
     int is_missing_info;
 
     data_image *data;
-
-} symbol;
+};
 
 char* convert_bin_to_base64(const char* binary);
 char* truncate_string(const char* input, int length);
