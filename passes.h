@@ -35,8 +35,8 @@ status generate_directive_output(const char *file_name, char *ext, Directive tar
 status process_command_word(file_context *src, char *p_line, char *first_param, char *second_param);
 
 symbol* find_symbol(const char* label);
-symbol *declare_label(file_context *src, const char *label, size_t label_len, status *report);
 symbol* add_symbol(file_context *src, const char* label, int address, status *report);
+symbol *declare_label(file_context *src, char *label, size_t label_len, status *report);
 
 data_image* add_data_image_default(file_context *src, const char* label, status *report) ;
 
