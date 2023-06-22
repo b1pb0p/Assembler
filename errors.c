@@ -5,8 +5,10 @@
 
 #include <stdio.h>
 #include <stdarg.h>
+#include <ctype.h>
 #include "errors.h"
 #include "utils.h"
+#include "data.h"
 
 /* Status messages */
 const char *msg[MSG_LEN] = {
@@ -22,13 +24,15 @@ const char *msg[MSG_LEN] = {
         "%s - Missing operand on line %d.",
         "%s - Too many operands on line %d.",
         "%s - Illegal use of operand on line %d.",
-        "%s - Invalid data call: Invalid value on line %d.",
+        "%s - Invalid string call (missing info) on line %d.",
+        "%s - Invalid data call: (missing info) on line %d.",
         "%s - Excessive comma on line %d.",
         "%s - Duplicate label declaration on line %d.",
         "%s - Label defined at the beginning of the extern line is meaningless and will be ignored.",
         "%s - Label declared in forbidden context on line %d",
         "%s - Invalid register used on line %d.",
         "%s - Extraneous text on line %d.",
+        "%s - Missing '\"' symbol on line %d.",
         "%s - Missing '@' symbol on line %d.",
         "%s - Missing ':' symbol after label declaration on line %d.",
         "%s - Missing ',' symbol on line %d.",
@@ -36,9 +40,10 @@ const char *msg[MSG_LEN] = {
         "%s - Macro too long on line %d. Cannot exceed 31 characters.",
         "%s - Invalid macro name (%s) on line %d.",
         "%s - Label (%s) cannot start with a digit on line %d",
+        "%s - %s (%s) contains illegal characters on line %d",
         "%s - Label (%s) does not exist on line %d.",
+        "%s - Invalid Command or Directive after %s, (%s) on line %d.",
         "%s - Invalid label name (%s) on line %d.",
-        "%s - Invalid Command or Directive after label declaration, (%s) on line %d.",
         "%s - Duplicate macro name on line %d.",
         "%s - Missing opening 'mcro' on line %d.",
         "%s - Missing closing 'endmcro' on line %d.",
@@ -60,9 +65,10 @@ const char *msg[MSG_LEN] = {
  */
 void handle_error(status code, ...) {
     va_list args;
-    file_context* fc;
+    file_context *fc = NULL;
+    data_image *data = NULL;
     int num, tot;
-    char *fncall;
+    char *fncall, *fncall_par;
 
     va_start(args, code);
 
@@ -93,6 +99,16 @@ void handle_error(status code, ...) {
 
         if (code < OPEN_FILE)
             fprintf(stderr, msg[code], fc->file_name);
+        else if (code == ERR_LABEL_DOES_NOT_EXIST) {
+            data = va_arg(args, data_image*);
+            fprintf(stderr, msg[code], fc->file_name, data->p_sym->label, data->lc);
+        }
+        else if (code == ERR_INVALID_ACTION || code == ERR_ILLEGAL_CHARS) {
+            fncall_par = va_arg(args, char*);
+            fncall = va_arg(args, char*);
+            fprintf(stderr, msg[code], fc->file_name, tolower(*fncall_par) == 'l' ? "label declaration"
+                    : *fncall_par == 'd' ? "data assigment" : "string assigment", fncall, fc->lc);
+        }
         else if (code >= ERR_INVAL_MACRO_NAME && code <= ERR_INVALID_LABEL) {
             fncall = va_arg(args, char*);
             fprintf(stderr, msg[code], fc->file_name, fncall ,fc->lc);

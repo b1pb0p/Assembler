@@ -189,8 +189,8 @@ status create_base64_word(data_image* data) {
         return FAILURE;
     }
 
-    if (!data->is_word_complete)
-        return NO_ERROR; /* TODO: check ; To not trigger any false alarm, will be handled in the second pass */
+    //if (!data->is_word_complete)
+    //    return NO_ERROR; /* TODO: check ; To not trigger any false alarm, will be handled in the second pass */
 
     if (data->concat == DEFAULT_12BIT)
         report = concat_default_12bit(data, &binary_word);

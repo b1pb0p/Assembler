@@ -10,7 +10,7 @@
 
 #define FILE_EXT_LEN 3 /* .as */
 #define FILE_EXT_LEN_OUT 4 /* .obj */
-#define MAX_LINE_LENGTH 82 /* 80 + '\0' */
+#define MAX_LINE_LENGTH 80 /* 80 - Using strlen */
 #define MAX_LABEL_LENGTH 32 /*  31 + '\0' */
 #define DIRECTIVE_LEN 4
 #define COMMANDS_LEN 16
@@ -32,6 +32,13 @@ typedef enum {
     R,
     E
 } ARE;
+
+typedef enum {
+    LBL,
+    NUM,
+    STR,
+    INV
+} Value;
 
 typedef enum {
     DATA = 1,

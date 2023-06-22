@@ -25,16 +25,24 @@ break;
 
 status preprocess_file(const char* file_name, file_context** dest , int index, int max);
 
-/** TODO: remove after testing!! */
-#define number_of_lines 4
-void test() {
-    void test_out();
-    char *lines[number_of_lines] = {
-            "LENGTH: .data XYZ,-9,15",
+void test() { /** TODO: remove after testing!! */
+    #define number_of_lines 4
+    void test_out(file_context *src);
+    char *data_lines[number_of_lines] = {
+            "LENGTH: .data XYZ ,   -9,15",
             ".data LENGTH,9, 7, 9",
             "XYZ: .data 51",
-            "XYZ: .data 51"
+            ".data 6,-9,15, 22"
+
     };
+
+    char *str_lines[number_of_lines] = {
+            "STR: .string \"abcdef\"",
+            ".string",
+            "LONG: .string \"bar\"",
+            ".string LONG, STR"
+    };
+
     char label[36];
     char temp[36];
     int i;
@@ -44,22 +52,44 @@ void test() {
     file_context *fc = create_file_context("as", ASSEMBLY_EXT, FILE_EXT_LEN, FILE_MODE_READ, &code);
 
     code = NO_ERROR;
-    size = get_word(&lines[0], label, SPACE);
-    printf("Processing ... \n %s\n",label);
-    get_word(&lines[0], temp, SPACE);
-    sym = declare_label(fc, label, size, &code);
-    process_data(fc, label, lines[0], &code);
-    printf("\n second line \n");
-    size = get_word(&lines[1], label, SPACE);
-    printf("Processing ... \n %s\n",label);
-    process_data(fc, NULL, lines[1], &code);
-    printf("\n third line \n");
-    size = get_word(&lines[2], label, SPACE);
-    printf("Processing ... \n %s\n",label);
-    get_word(&lines[2], temp, SPACE);
-    sym = declare_label(fc, label, size, &code);
-    process_data(fc, label, lines[2], &code);
-    test_out();
+
+    for (i = 0; i < number_of_lines; i++) {
+        if (i == 0)
+            printf("\n %d line \n",fc->lc);
+        else
+            printf("\n %d line \n",++fc->lc);
+
+        if (i % 2 == 0) {
+            size = get_word(&data_lines[i], label, SPACE);
+            printf("Processing ... \n %s\n",data_lines[i]);
+            get_word(&data_lines[i], temp, SPACE);
+            sym = declare_label(fc, label, size, &code);
+            process_data(fc, label, data_lines[i], &code);
+        }
+        else {
+            size = get_word(&data_lines[i], label, SPACE);
+            printf("Processing ... \n %s\n",data_lines[i]);
+            process_data(fc, NULL, data_lines[i], &code);
+        }
+    }
+    for (i = 0; i < number_of_lines; i++) {
+        printf("\n %d line \n",++fc->lc);
+
+        if (i % 2 == 0) {
+            size = get_word(&str_lines[i], label, SPACE);
+            printf("Processing ... \n %s\n",str_lines[i]);
+            get_word(&str_lines[i], temp, SPACE);
+            sym = declare_label(fc, label, size, &code);
+            process_string(fc, label, str_lines[i], &code);
+        }
+        else {
+            size = get_word(&str_lines[i], label, SPACE);
+            printf("Processing ... \n %s\n",str_lines[i]);
+            process_string(fc, NULL, str_lines[i], &code);
+        }
+    }
+
+    test_out(fc);
 
 }
 /** TODO: remove after testing!! */
