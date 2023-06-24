@@ -28,6 +28,7 @@ typedef struct {
     char* binary_a_r_e;
     char* base64_word;
 
+    Directive directive;
     concat_actions concat;
     symbol *p_sym;
 

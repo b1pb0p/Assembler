@@ -237,6 +237,7 @@ data_image* create_data_image(int lc) {
     p_ret->binary_a_r_e = NULL;
     p_ret->base64_word = NULL;
 
+    p_ret->directive = DATA;
     p_ret->concat = DEFAULT_12BIT;
     p_ret->p_sym = NULL;
     p_ret->value = NULL;
