@@ -86,6 +86,7 @@ status assembler_second_pass(file_context **src) {
 
 void test_out(file_context *src) { /*TODO: REMOVE */
     size_t i;
+    char err_src[36];
     int error_flag = 0;
     data_image *runner = NULL;
     printf("\n***** TESTING *****\n");
@@ -97,6 +98,7 @@ void test_out(file_context *src) { /*TODO: REMOVE */
                 runner->value = runner->p_sym->data->value;
             else {
                 error_flag = 1;
+                strcpy(err_src, runner-> p_sym->label);
                 handle_error(ERR_LABEL_DOES_NOT_EXIST, src, runner);
                 continue;
             }
@@ -106,7 +108,7 @@ void test_out(file_context *src) { /*TODO: REMOVE */
 
     if (error_flag) {
         //clean-up
-        printf("Exiting ...\n");
+        printf("Exiting ... (%s) is doing some trouble\n",err_src);
         return;
     }
 
@@ -128,18 +130,21 @@ status process_line(file_context *src, char *p_line) {
     is_valid_label_exist = is_label(src, first_word, &report)
                            && (sym = declare_label(src, first_word, word_len, &report)) && report != ERR_MEM_ALLOC;
 
-    /* New label declaration following a Directive or a Command */
-    if (is_valid_label_exist) {
-        process_line_w_label(src, p_line, sym, &report);
-    }
-    else if (report != ERR_MEM_ALLOC){ /* Process line without any associated label */
-        //process_line_wout_label(src, p_line, &report);
+
+    if (is_valid_label_exist) /* Label declaration following a Directive or a Command */
+        handle_processing_line(src, p_line, sym, &report);
+    else if (report != ERR_MEM_ALLOC) /* Process line without any associated label */
+        handle_processing_line(src, p_line, NULL, &report);
+    else {
+        report = TERMINATE;
+        handle_error(TERMINATE, "process_line()");
     }
     return report;
 }
 
-void process_line_w_label(file_context *src,char *line, symbol *sym, status *report) {
+void handle_processing_line(file_context *src, char *line, symbol *sym, status *report) {
     char next_word[MAX_LABEL_LENGTH];
+    char *p_label = NULL;
     data_image *p_data_image = NULL;
     Directive dir = 0;
     Command cmd = 0;
@@ -147,6 +152,7 @@ void process_line_w_label(file_context *src,char *line, symbol *sym, status *rep
     int condition;
 
     word_len =  get_word(&line, next_word, SPACE);
+    if (sym) p_label = sym->label;
 
     condition = word_len && !is_label(src, next_word, NULL) &&
                 ((dir = is_directive(next_word + 1) || (cmd = is_command(next_word))));
@@ -162,12 +168,10 @@ void process_line_w_label(file_context *src,char *line, symbol *sym, status *rep
         if (!p_data_image->binary_opcode) *report = FAILURE;
     }
     else if (dir == ENTRY || dir == EXTERN) {
-        handle_error(ERR_MEANINGLESS_LABEL, src);
         /* *report = dir == ENTRY ? process_entry() : process_extern(); */
     }
     else if (dir == STRING || dir == DATA) {
-        DC++;
-        // dir == STRING ? process_string() : process_data(src, sym->label, line, report);
+        dir == STRING ? process_string(src, p_label, line, report) : process_data(src, p_label, line, report);
     }
 }
 
@@ -196,7 +200,7 @@ void process_data(file_context *src, const char *label, char *line, status *repo
             continue;
         }
 
-        assert_data_img_by_label(src, label, &is_first_value, &value, &p_data, report);
+        assert_data_img_by_label(src, DATA ,label, &is_first_value, &value, &p_data, report);
         if (*report == ERR_MEM_ALLOC)
             return;
 
@@ -216,13 +220,9 @@ void process_data(file_context *src, const char *label, char *line, status *repo
 }
 
 void process_string(file_context *src, const char *label, char *line, status *report) {
-    char p_ch;
-    char *word = NULL;
-    char *p_word = NULL;
+    char p_ch, *word = NULL, *p_word = NULL;
+    int is_first_char, is_first_value = 0, *value = NULL;
     data_image *p_data = NULL;
-    int *value = NULL;
-    int is_first_value = 0;
-    int is_first_char;
     status temp_report = NO_ERROR;
     Value val_type;
 
@@ -237,37 +237,58 @@ void process_string(file_context *src, const char *label, char *line, status *re
         }
         is_first_char = 0;
         p_word = word;
-        while (string_parser(src, &word, &p_ch, report) == NO_ERROR) { /* Process each character */
-            assert_data_img_by_label(src, label, &is_first_value, &value, &p_data, report);
+        while (val_type == LBL || (string_parser(src, &word, &p_ch, report) == NO_ERROR)) { /* Process each character */
+            assert_data_img_by_label(src, DATA, label, &is_first_value, &value, &p_data, report);
+
             if (*report == ERR_MEM_ALLOC)
                 return;
-            else if (val_type == LBL)
-                assert_data_img_by_label(src, label, &is_first_value, &value, &p_data, report);
-// todo : if valid label...
+
             *value = (int)p_ch;
-            if (!is_first_char && !isalpha(*value))
-                handle_error(ERR_ILLEGAL_CHARS, src, "label", word);
+            if (val_type != LBL && !is_first_char && !isalpha(*value))
+                handle_error(ERR_ILLEGAL_CHARS, src, "string", word);
+            else if (!is_first_char)
 
             is_first_char = is_first_value =  1;
-            temp_report = assert_value_to_data(src, STRING, val_type, &p_ch, &value, &p_data, report);
+            temp_report = assert_value_to_data(src, STRING, val_type,
+            val_type == LBL ? p_word: &p_ch, &value, &p_data, report);
 
             if (temp_report == TERMINATE) {
                 FREE_AND_NULL(p_word);
                 return;
-            }
-            else if (temp_report == FAILURE)
+            } else if (temp_report == FAILURE) {
+                if (val_type == LBL) break;
                 continue;
+            }
 
             DC++;
             p_data->value = value;
             p_data->concat = VALUE;
+            if (val_type == LBL) break;
         }
        FREE_AND_NULL(p_word);
     }
     if (!is_first_value) /* Missing action after .string */
         handle_error(ERR_INVALID_STRING, src);
     FREE_AND_NULL(p_word);
+}
 
+void process_entry(file_context *src, const char *label, char *line, status *report) {
+    char word[MAX_LABEL_LENGTH];
+    status temp_report = NO_ERROR;
+    data_image *p_data = NULL;
+    symbol *sym = NULL;
+
+    if (label)
+        handle_error(WARN_MEANINGLESS_LABEL, src);
+
+    while (*line != '\n' && *line != '\0' && get_word(&line,word,COMMA) != 0) {
+        sym = add_symbol(src, word, INVALID_ADDRESS, report);
+        p_data = add_data_image(src, ENTRY, NULL, report);
+
+        if (!sym || !p_data)
+            return;
+        p_data->p_sym = sym;
+    }
 }
 
 Value line_parser(file_context *src, Directive dir, char **line, char *word, status *report) {
@@ -323,7 +344,13 @@ Value line_parser(file_context *src, Directive dir, char **line, char *word, sta
 
 status string_parser(file_context *src, char **word, char *ch, status *report) {
     static int is_first_qmark = 0;
+    static status reached_end = 0;
     status ret_val = NO_ERROR;
+
+    if (reached_end) {
+        reached_end = 0;
+        return TERMINATE;
+    }
 
     if (**word == '\"') {
         if (!is_first_qmark) {
@@ -333,15 +360,17 @@ status string_parser(file_context *src, char **word, char *ch, status *report) {
         else {
             is_first_qmark = 0;
             (*word)++;
-            ch = NULL;
+            *ch = '\0';
             *report = (**word != '\0' && **word != '\n') ? ERR_EXTRA_TEXT : *report;
-            return TERMINATE;
+            ret_val = NO_ERROR;
+            reached_end = 1;
         }
     }
     else {
        if ((*word)[1] == '\0' || (*word)[1] == '\n') {
             is_first_qmark = 0;
-            ret_val = TERMINATE;
+            ret_val = NO_ERROR;
+            reached_end = 1;
             *report = ERR_MISSING_QMARK;
             handle_error(ERR_MISSING_QMARK, src);
         }  else if (!is_first_qmark) {
@@ -520,23 +549,22 @@ symbol* add_symbol(file_context *src, const char* label, int address, status *re
     }
 }
 
-/**
- * Create a new data image with default properties and add it to the data image object array.
- *
- * @param src A pointer to a file_context struct.
- * @param label The label associated with the data image. Pass NULL if no label is present.
- * @param address The address value of the data image. Pass INVALID_ADDRESS to create a new address.
- * @param report A pointer to a status report variable.
- * @return A pointer to the newly created data image, or NULL in case of errors.
- */
-data_image* add_data_image_default(file_context *src, const char* label, status *report) {
-    static size_t data_obj_cap = 0;
-    size_t new_cap = data_obj_cap + DEFAULT_DATA_IMAGE_CAP;
+data_image* add_data_image(file_context *src, Directive dir, const char* label, status *report) {
+    static size_t data_obj_def_cap = 0;
+    static size_t data_obj_ent_cap = 0;
+    static size_t data_obj_ext_cap = 0;
+    data_image ***p_data_arr = NULL;
+    size_t new_cap, *p_new_cap = NULL,*p_index = NULL;
     data_image **data_arr = NULL;
     data_image *new_image = create_data_image(src->lc); /* creates new data_image, setting the lc in which declared */
 
-    if (!new_image || (data_obj_cap <= data_arr_obj_index &&
-                       !(data_arr = realloc(data_img_obj, (new_cap) * sizeof(data_image *))))) {
+    p_index = DEFAULT ? &data_arr_obj_index : dir == ENTRY ? &data_arr_ent_index : &data_arr_ext_index;
+    p_new_cap = DEFAULT ? &data_obj_def_cap : dir == ENTRY ? &data_obj_ent_cap : &data_obj_ext_cap;
+    p_data_arr = DEFAULT ? &data_img_obj : dir == ENTRY ? &data_img_ent : &data_img_ext;
+    new_cap = *p_new_cap + DEFAULT_DATA_IMAGE_CAP;
+
+    if (!new_image || (*p_new_cap <= *p_index &&
+                       !(data_arr = realloc(*p_data_arr, (new_cap) * sizeof(data_image *))))) {
         *report = ERR_MEM_ALLOC;
         return NULL;
     }
@@ -550,12 +578,12 @@ data_image* add_data_image_default(file_context *src, const char* label, status 
         }
     }
 
-    if (data_arr) {
-        data_img_obj = data_arr;
-        data_obj_cap = new_cap;
+    if (data_arr) { //TODO: MEMORY FREE ?
+        *p_data_arr = data_arr;
+        *p_new_cap = new_cap;
     }
-    data_img_obj[data_arr_obj_index] = new_image;
-    data_arr_obj_index++;
+    (*p_data_arr)[(*p_index)++] = new_image;
+
 
     return new_image;
 }
@@ -693,14 +721,15 @@ int is_valid_string(char **line, char **word, status *report) {
     return 1;
 }
 
-void assert_data_img_by_label(file_context *src, const char *label, int *flag, int **value, data_image **p_data, status *report) {
+void assert_data_img_by_label(file_context *src, Directive dir, const char *label, int *flag,
+                              int **value, data_image **p_data, status *report) {
     if (label && !*flag) {
         *flag = 1;
-        if (!(*p_data = add_data_image_default(src, label, report)) && *report == ERR_MEM_ALLOC)
+        if (!(*p_data = add_data_image(src, dir, label, report)) && *report == ERR_MEM_ALLOC)
             return;
     }
     else {/* A label can only be associated with the initial value */
-        if (!(*p_data = add_data_image_default(src, NULL, report)) && *report == ERR_MEM_ALLOC)
+        if (!(*p_data = add_data_image(src, dir, NULL, report)) && *report == ERR_MEM_ALLOC)
             return;
     }
 

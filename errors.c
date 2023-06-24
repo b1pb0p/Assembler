@@ -28,7 +28,7 @@ const char *msg[MSG_LEN] = {
         "%s - Invalid data call: (missing info) on line %d.",
         "%s - Excessive comma on line %d.",
         "%s - Duplicate label declaration on line %d.",
-        "%s - Label defined at the beginning of the extern line is meaningless and will be ignored.",
+        "%s - Label defined at the beginning of the extern line is meaningless and will be ignored. on line %d.",
         "%s - Label declared in forbidden context on line %d",
         "%s - Invalid register used on line %d.",
         "%s - Extraneous text on line %d.",
@@ -81,10 +81,10 @@ void handle_error(status code, ...) {
         fprintf(stderr, "TERMINATED ->\t");
         fprintf(stderr, msg[code], fncall);
     }
-    else if (code == ERR_MEANINGLESS_LABEL) {
+    else if (code == WARN_MEANINGLESS_LABEL) {
         fc = va_arg(args, file_context*);
         fprintf(stderr, "WARNING ->\t");
-        fprintf(stderr, msg[code], fc->file_name);
+        fprintf(stderr, msg[code], fc->file_name, fc->lc);
     }
     else if (code == ERR_PRE || code == ERR_FIRST_PASS) {
         fprintf(stderr, "ERROR ->\t");
