@@ -28,12 +28,6 @@ extern const char *directives[DIRECTIVE_LEN];
 extern const char *commands[COMMANDS_LEN];
 
 typedef enum {
-    A,
-    R,
-    E
-} ARE;
-
-typedef enum {
     LBL,
     NUM,
     STR,
@@ -85,7 +79,7 @@ typedef struct {
     char* file_name;
     char* file_name_wout_ext;
     int ic; /* Instructions counter */
-    int dc; /* Data counter */
+    int dc; /* Data counter */ //todo: remove?
     int lc; /* Line counter */
 } file_context;
 

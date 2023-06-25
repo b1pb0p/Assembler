@@ -24,12 +24,11 @@ const char *msg[MSG_LEN] = {
         "%s - Missing operand on line %d.",
         "%s - Too many operands on line %d.",
         "%s - Illegal use of operand on line %d.",
-        "%s - Invalid string call (missing info) on line %d.",
-        "%s - Invalid data call: (missing info) on line %d.",
+        "%s - Invalid %s (%s) call on line %d.",
         "%s - Excessive comma on line %d.",
         "%s - Duplicate label declaration on line %d.",
         "%s - Label defined at the beginning of the extern line is meaningless and will be ignored. on line %d.",
-        "%s - Label declared in forbidden context on line %d",
+        "%s - Label declared/ used in forbidden context on line %d",
         "%s - Invalid register used on line %d.",
         "%s - Extraneous text on line %d.",
         "%s - Missing '\"' symbol on line %d.",
@@ -103,11 +102,11 @@ void handle_error(status code, ...) {
             data = va_arg(args, data_image*);
             fprintf(stderr, msg[code], fc->file_name, data->p_sym->label, data->lc);
         }
-        else if (code == ERR_INVALID_ACTION || code == ERR_ILLEGAL_CHARS) {
+        else if (code == ERR_INVALID_ACTION || code == ERR_ILLEGAL_CHARS || code == ERR_INVALID_SYNTAX) {
             fncall_par = va_arg(args, char*);
             fncall = va_arg(args, char*);
             fprintf(stderr, msg[code], fc->file_name, tolower(*fncall_par) == 'l' ? "label declaration"
-                    : *fncall_par == 'd' ? "data assigment" : "string assigment", fncall, fc->lc);
+                                                                                  : *fncall_par == 'd' ? "data assigment" : "string assigment", fncall, fc->lc);
         }
         else if (code >= ERR_INVAL_MACRO_NAME && code <= ERR_INVALID_LABEL) {
             fncall = va_arg(args, char*);
