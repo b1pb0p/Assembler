@@ -22,17 +22,16 @@ free ((p_mem)); \
 (p_mem) = NULL;                             \
 }
 
+/** Global variables are reset to zero during cleanup **/
 symbol **symbol_table = NULL;
 data_image **data_img_obj = NULL;
-data_image **data_img_ent = NULL;
-data_image **data_img_ext = NULL;
 
 size_t symbol_count = 0;
 size_t data_arr_obj_index = 0;
-size_t data_arr_ent_index = 0;
-size_t data_arr_ext_index = 0;
+
 int DC = 0;
 int IC = 0;
+int next_free_address = ADDRESS_START;
 
 status assembler_first_pass(file_context **src) {
     char line[MAX_BUFFER_LENGTH];
@@ -75,72 +74,13 @@ status assembler_second_pass(file_context **src) {
 
     report = generate_obj_output(p_src->file_name_wout_ext, IC, DC);
     UPDATE_REPORT_STATUS(report, &src);
-    report = generate_directive_output(p_src->file_name_wout_ext, ENTRY_EXT, ENTRY);
+    //    report = generate_directive_output(p_src->file_name_wout_ext, ENTRY_EXT, ENTRY);
     UPDATE_REPORT_STATUS(report, &src);
-    report = generate_directive_output(p_src->file_name_wout_ext, EXTERNAL_EXT, EXTERN);
+    //   report = generate_directive_output(p_src->file_name_wout_ext, EXTERNAL_EXT, EXTERN);
     UPDATE_REPORT_STATUS(report, &src);
 
     free_global_data_and_symbol();
     return report;
-}
-
-void test_out(file_context *src) { /*TODO: REMOVE */
-    size_t i;
-    char err_src[36];
-    int error_flag = 0;
-    data_image *runner = NULL;
-    printf("\n***** TESTING *****\n");
-
-    for (i = 0; i < data_arr_obj_index; i++) {
-        runner = data_img_obj[i];
-        if (!runner->value && runner->p_sym) {
-            if (runner->p_sym->data)// && runner->p_sym->data->value)
-                runner->value = runner->p_sym->data->value;
-            else {
-                error_flag = 1;
-                strcpy(err_src, runner->p_sym->label);
-                handle_error(ERR_LABEL_DOES_NOT_EXIST, src, runner);
-                continue;
-            }
-        }
-        if (!error_flag) printf("Data_image: @%p, value: %d\n",data_img_obj[i], *(data_img_obj[i]->value));
-    }
-
-    if (error_flag) {
-        //clean-up
-        printf("Exiting ... (%s) is doing some trouble\n",err_src);
-        return;
-    }
-
-    printf("DC: %lu\t | Actual Memory allocation for data_image: %lu\nBase-64 Words:\n",
-           (unsigned long)DC, (unsigned long)data_arr_obj_index);
-    for (i = 0; i < data_arr_obj_index; i++) {
-        create_base64_word(data_img_obj[i]);
-        printf("Data_image: @%p, value: %s\n",data_img_obj[i], data_img_obj[i]->base64_word);
-    }
-
-    printf("\nMemory allocation for entry data_image: %lu\nBase-10 Words:\n",(unsigned long)data_arr_ent_index);
-    for (i = 0; i < data_arr_ent_index; i++) {
-        runner = data_img_ent[i];
-        if (!runner->p_sym->address_decimal ) {
-            if (runner->p_sym->data)// && runner->p_sym->data->value)
-                runner->p_sym->address_decimal = runner->p_sym->data->p_sym->address_decimal;
-            else {
-                error_flag = 1;
-                strcpy(err_src, runner-> p_sym->label);
-                handle_error(ERR_LABEL_DOES_NOT_EXIST, src, runner);
-                continue;
-            }
-        }
-        if (!error_flag) printf("Data_image: @%p | label: %s | value: %d|\n",data_img_ent[i],data_img_ent[i]->p_sym->label,
-                                data_img_ent[i]->p_sym->address_decimal);
-    }
-
-    if (error_flag) {
-        //clean-up
-        printf("Exiting ... (%s) is doing some trouble\n",err_src);
-        return;
-    }
 }
 
 status process_line(file_context *src, char *p_line) {
@@ -231,7 +171,7 @@ void process_data(file_context *src, const char *label, char *line, status *repo
             continue;
         }
 
-        assert_data_img_by_label(src, DEFAULT ,label, &is_first_value, &value, &p_data, report);
+        assert_data_img_by_label(src, label, &is_first_value, &value, &p_data, report);
         if (*report == ERR_MEM_ALLOC)
             return;
 
@@ -278,7 +218,7 @@ void process_string(file_context *src, const char *label, char *line, status *re
         is_first_char = 0;
         p_word = word;
         while (val_type == LBL || (string_parser(src, &word, &p_ch, report) == NO_ERROR)) { /* Process each character */
-            assert_data_img_by_label(src, DEFAULT, label, &is_first_value, &value, &p_data, report);
+            assert_data_img_by_label(src, label, &is_first_value, &value, &p_data, report);
 
             if (*report == ERR_MEM_ALLOC)
                 return;
@@ -312,51 +252,21 @@ void process_string(file_context *src, const char *label, char *line, status *re
     FREE_AND_NULL(p_word);
 }
 
-void process_entry(file_context *src, const char *label, char *line, status *report) {
+void process_directive(file_context *src, Directive dir, const char *label, char *line, status *report) {
     char word[MAX_LABEL_LENGTH];
-    data_image *p_data = NULL;
     symbol *sym = NULL;
 
     if (label)
-        handle_error(WARN_MEANINGLESS_LABEL, src);
+        handle_error(WARN_MEANINGLESS_LABEL, src, dir);
 
     while (*line != '\n' && *line != '\0' && get_word(&line,word,COMMA) != 0) {
-        (void) line_parser(src, ENTRY, &line, word, report);
+        (void) line_parser(src, dir, &line, word, report);
         sym = add_symbol(src, word, INVALID_ADDRESS, report);
-        p_data = add_data_image(src, ENTRY, NULL, report);
 
-        if (!sym || !p_data)
+        if (!sym)
             return;
-        p_data->p_sym = sym;
-        p_data->directive = ENTRY;
-    }
-}
 
-void process_extern(file_context *src, const char *label, char *line, status *report) {
-    char word[MAX_LABEL_LENGTH];
-    data_image *p_data = NULL;
-    symbol *sym = NULL;
-    int *value = NULL;
-
-    if (label)
-        handle_error(WARN_MEANINGLESS_LABEL, src);
-
-    while (*line != '\n' && *line != '\0' && get_word(&line,word,COMMA) != 0) {
-        (void) line_parser(src, ENTRY, &line, word, report);
-        sym = add_symbol(src, word, INVALID_ADDRESS, report);
-        p_data = add_data_image(src, EXTERN, NULL, report);
-
-        if (!sym || !p_data)
-            return;
-        else if (!(value = malloc(sizeof (int)))) {
-            handle_error(ERR_MEM_ALLOC);
-            return;
-        }
-
-        p_data->p_sym = sym;
-        *value = 0;
-        p_data->value = value;
-        p_data->directive = EXTERN;
+        sym->sym_dir = dir;
     }
 }
 
@@ -500,45 +410,43 @@ status generate_obj_output(const char *file_name, size_t ic, size_t dc) {
  * @param target The target Directive (ENTRY or EXTERN).
  * @return The status of the operation. Returns NO_ERROR on success, or FAILURE if an error occurred.
  */
-status generate_directive_output(const char *file_name, char *ext, Directive target) {
+status generate_directive_output(file_context  *src, Directive dir) {
+    int i;
+    int error_flag = 0;
+    symbol *runner = NULL;
+    data_image *d_runner = NULL;
     status report = NO_ERROR;
-    size_t i, boundary;
-    data_image **p_data = NULL;
-    symbol *p_sym = NULL;
-    file_context *dest = create_file_context(file_name, ext, FILE_EXT_LEN_OUT, FILE_MODE_WRITE, &report);
-
-    boundary = target == EXTERN ? data_arr_ext_index : data_arr_ent_index;
-    p_data = target == EXTERN ? data_img_ext : data_img_ent;
+    file_context *dest = create_file_context(src->file_name_wout_ext,
+    dir == EXTERN ? EXTERNAL_EXT : ENTRY_EXT, FILE_EXT_LEN_OUT, FILE_MODE_WRITE, &report);
 
     if (!dest)
         return FAILURE;
 
-    if (!p_data || !*p_data)
-        return NO_ERROR;
+    for (i = 0; i < symbol_count; i++) {
+        runner = symbol_table[i];
+        if (runner && runner->sym_dir == dir) {
+            d_runner = dir == EXTERN ? runner->data : NULL;
 
-    for (i = 0; i < boundary; i++) {
-        fprintf(dest->file_ptr, "%s\t%d\n", p_sym->label, p_sym->address_decimal);
+            if (runner->is_missing_info) {
+                error_flag = 1;
+                handle_error(ERR_LABEL_DOES_NOT_EXIST, src, runner->label, runner->lc);
+                continue;
+            }
+            else if (dir == EXTERN && !d_runner) {
+                error_flag = 1;
+                handle_error(TERMINATE, "generate_directive_output()");
+                continue;
+            }
+            else if (!error_flag)
+                fprintf(dest->file_ptr, "%s\t%d\n", runner->label,
+                        dir == EXTERN ? runner->data->data_address :runner->address_decimal);
+        }
     }
+
     free_file_context(&dest);
     return report;
 }
 
-void print_extern(file_context *dest) {
-    int i;
-    symbol *sym = NULL;
-    data_image *p_obj = NULL;
-
-    for (i = 0; i < data_arr_obj_index; i++) {
-        p_obj = data_img_obj[i];
-        if (p_obj->p_sym && (sym = find_extern(p_obj->p_sym->label))) {
-            p_obj->value = sym->data->value;
-            fprintf(dest->file_ptr, "%s\t%d\n", sym->label, p_obj->address);
-            //TODO: add an address to the data image, not all data_images are linked to a symbol
-        }
-
-
-    }
-}
 
 /**
  * Find a symbol in the symbol table based on its label.
@@ -557,40 +465,35 @@ symbol* find_symbol(const char* label) {
     return NULL;
 }
 
-symbol* find_extern(const char *label) {
-    symbol *sym = find_symbol(label);
-    return sym && sym->data && sym->data->directive == EXTERN ? sym : NULL;
-}
-
 /**
- * Updates the information of an existing symbol with a new address.
+ * Updates the information of an existing symbol with a new data_address.
  *
- * @param existing_symbol The existing symbol to update.
- * @param address The new address to assign to the symbol.
+ * @param sym The existing symbol to update.
+ * @param address The new data_address to assign to the symbol.
  * @return The status of the update operation.
  *         Returns NO_ERROR if the update was successful,
  *         or FAILURE if the conversion to binary failed.
  */
-status update_symbol_info(symbol* existing_symbol, int address) {
-    existing_symbol->address_decimal = address;
-    existing_symbol->address_binary = decimal_to_binary12(address);
+status update_symbol_info(symbol *sym, int address) {
+    sym->address_decimal = address;
+    sym->address_binary = decimal_to_binary12(address);
 
-    if (!existing_symbol->address_binary)
+    if (!sym->address_binary)
         return FAILURE;
 
-    existing_symbol->is_missing_info = 0;
+    sym->is_missing_info = 0;
     return NO_ERROR;
 }
 
 /**
  * Add a symbol to the symbol table.
- * If the symbol already exists and has missing information, its information is updated with the provided address.
+ * If the symbol already exists and has missing information, its information is updated with the provided data_address.
  * If the symbol already exists and has complete information, NULL is returned.
- * If the symbol is new, it is added to the symbol table with the provided label and address.
+ * If the symbol is new, it is added to the symbol table with the provided label and data_address.
  *
  * @param src A pointer to a file_context.
  * @param label The label of the symbol to add.
- * @param address The address of the symbol.
+ * @param address The data_address of the symbol.
  * @param report A pointer to a status report variable.
  * @return A pointer to the added symbol if it is new or has missing information, or NULL if the symbol already exists with complete information.
  *         Returns NULL in case of memory allocation errors during symbol creation or table expansion.
@@ -639,8 +542,10 @@ symbol* add_symbol(file_context *src, const char* label, int address, status *re
             new_symbol->address_binary = decimal_to_binary12(address);
             new_symbol->is_missing_info = 0;
         }
+
+        new_symbol->lc = src->lc;
+        new_symbol->sym_dir = DEFAULT;
         new_symbol->data = NULL;
-        // new_symbol->data = create_data_image(src->lc);
         symbol_table = new_symbol_table;
         symbol_table[symbol_count++] = new_symbol;
 
@@ -648,22 +553,14 @@ symbol* add_symbol(file_context *src, const char* label, int address, status *re
     }
 }
 
-data_image* add_data_image(file_context *src, Directive dir, const char* label, status *report) {
-    static size_t data_obj_def_cap = 0;
-    static size_t data_obj_ent_cap = 0;
-    static size_t data_obj_ext_cap = 0;
-    data_image ***p_data_arr = NULL;
-    size_t new_cap, *p_new_cap = NULL,*p_index = NULL;
+data_image* add_data_image(file_context *src, const char* label, status *report) {
+    static size_t data_obj_cap = 0;
+    size_t new_cap = data_obj_cap + DEFAULT_DATA_IMAGE_CAP;
     data_image **data_arr = NULL;
-    data_image *new_image = create_data_image(src->lc); /* creates new data_image, setting the lc in which declared */
+    data_image *new_image = create_data_image(src->lc, &next_free_address);
 
-    p_index = dir == DEFAULT ? &data_arr_obj_index : dir == ENTRY ? &data_arr_ent_index : &data_arr_ext_index;
-    p_new_cap = dir == DEFAULT ? &data_obj_def_cap : dir == ENTRY ? &data_obj_ent_cap : &data_obj_ext_cap;
-    p_data_arr = dir == DEFAULT ? &data_img_obj : dir == ENTRY ? &data_img_ent : &data_img_ext;
-    new_cap = *p_new_cap + DEFAULT_DATA_IMAGE_CAP;
-
-    if (!new_image || (*p_new_cap <= *p_index &&
-                       !(data_arr = realloc(*p_data_arr, (new_cap) * sizeof(data_image *))))) {
+    if (!new_image || (data_obj_cap <= data_arr_obj_index &&
+                       !(data_arr = realloc(data_img_obj, (new_cap) * sizeof(data_image *))))) {
         *report = ERR_MEM_ALLOC;
         return NULL;
     }
@@ -675,19 +572,23 @@ data_image* add_data_image(file_context *src, Directive dir, const char* label, 
             free_data_image(&new_image);
             return NULL;
         }
+        next_free_address--; /* updated within create_data_image() */
+        new_image->data_address = next_free_address;
     }
 
-    if (data_arr) { //TODO: MEMORY FREE ?
-        *p_data_arr = data_arr;
-        *p_new_cap = new_cap;
+    if (data_arr) {
+        data_img_obj = data_arr;
+        data_obj_cap = new_cap;
     }
-    (*p_data_arr)[(*p_index)++] = new_image;
-
+    data_img_obj[data_arr_obj_index++] = new_image;
 
     return new_image;
 }
 
-symbol *declare_label(file_context *src, char *label, size_t label_len, status *report) {
+
+
+symbol* declare_label(file_context *src, char *label, size_t label_len, status *report) {
+    symbol *sym = NULL;
     if (!strncpy(label, label, label_len - 1)) {
         handle_error(ERR_MEM_ALLOC);
         return NULL;
@@ -700,7 +601,10 @@ symbol *declare_label(file_context *src, char *label, size_t label_len, status *
         *report = ERR_MISSING_COLON;
     }
 
-    return add_symbol(src, label, (DC+IC) + ADDRESS_START, report);
+    sym = add_symbol(src, label, next_free_address, report);
+    next_free_address = sym ? next_free_address + 1 : next_free_address;
+
+    return sym;
 }
 
 /**
@@ -711,7 +615,7 @@ symbol *declare_label(file_context *src, char *label, size_t label_len, status *
  *
  * @remarks The function checks if the label meets the following criteria:
  *   - The label is not NULL and has a length between 1 and MAX_LABEL_LENGTH characters.
- *   - The label does not match any reserved command or directive.
+ *   - The label does not match any reserved command or sym_dir.
  *   - The label does not start with a digit.
  *   - The label consists only of alphanumeric characters.
  *   - The label ends with a colon (':') to indicate a label declaration.
@@ -837,15 +741,15 @@ int is_valid_string(char **line, char **word, status *report) {
     return 1;
 }
 
-void assert_data_img_by_label(file_context *src, Directive dir, const char *label, int *flag,
+void assert_data_img_by_label(file_context *src, const char *label, int *flag,
                               int **value, data_image **p_data, status *report) {
     if (label && !*flag) {
         *flag = 1;
-        if (!(*p_data = add_data_image(src, dir, label, report)) && *report == ERR_MEM_ALLOC)
+        if (!(*p_data = add_data_image(src, label, report)) && *report == ERR_MEM_ALLOC)
             return;
     }
     else {/* A label can only be associated with the initial value */
-        if (!(*p_data = add_data_image(src, dir, NULL, report)) && *report == ERR_MEM_ALLOC)
+        if (!(*p_data = add_data_image(src, NULL, report)) && *report == ERR_MEM_ALLOC)
             return;
     }
 
@@ -905,8 +809,6 @@ int is_valid_register(const char* str) {
  */
 void free_global_data_and_symbol() {
     free_data_image_array(&data_img_obj, &data_arr_obj_index);
-    free_data_image_array(&data_img_ent, &data_arr_ent_index);
-    free_data_image_array(&data_img_ext, &data_arr_ext_index);
     free_symbol_table(&symbol_table, &symbol_count);
 }
 
@@ -926,4 +828,98 @@ void cleanup(file_context **src) {
     free_file_context(&p_src);
     *src = NULL;
     free_global_data_and_symbol();
+}
+
+
+/* TODO: REMOVE!!!!!!!!!!!!!!! */
+void test_out(file_context *src) { /*TODO: REMOVE */
+    size_t i;
+    int error_flag = 0;
+    data_image *runner = NULL;
+    status print_extern(file_context *src, file_context *dest);
+    status print_entry(file_context *src, file_context *dest);
+
+    printf("\n***** TESTING *****\n");
+    if (!data_arr_obj_index) return;
+
+    for (i = 0; i < data_arr_obj_index; i++) {
+        runner = data_img_obj[i];
+        if (!runner->value && runner->p_sym) {
+            if (runner->p_sym->data)// && runner->p_sym->data->value)
+                runner->value = runner->p_sym->data->value;
+            else {
+                error_flag = 1;
+                handle_error(ERR_LABEL_DOES_NOT_EXIST, src, runner->p_sym->label, runner->lc);
+                continue;
+            }
+        }
+        if (!error_flag) printf("Data_image: @%p, value: %d\n",data_img_obj[i], *(data_img_obj[i]->value));
+    }
+
+    if (error_flag) {
+        return;
+    }
+
+    printf("DC: %lu\t | Actual Memory allocation for data_image: %lu\nBase-64 Words:\n",
+           (unsigned long)DC, (unsigned long)data_arr_obj_index);
+    for (i = 0; i < data_arr_obj_index; i++) {
+        create_base64_word(data_img_obj[i]);
+        printf("Data_image: @%p, value: %s\n",data_img_obj[i], data_img_obj[i]->base64_word);
+    }
+    printf("\n");
+    (void) print_entry(src,src);
+}
+
+status print_entry(file_context *src, file_context *dest) {
+    int i;
+    int error_flag = 0;
+    symbol *runner = NULL;
+
+    for (i = 0; i < symbol_count; i++) {
+        runner = symbol_table[i];
+        if (runner && runner->sym_dir == ENTRY) {
+            if (runner->is_missing_info) {
+                error_flag = 1;
+                handle_error(ERR_LABEL_DOES_NOT_EXIST, src, runner->label, runner->lc);
+                continue;
+            }
+            if (!error_flag)
+                fprintf(stdout, "%s\t%d\n", runner->label, runner->address_decimal);
+            //  fprintf(dest->file_ptr, "%s\t%d\n", runner->label, runner->address_decimal);
+        }
+    }
+    if (error_flag)
+        return TERMINATE;
+    return NO_ERROR;
+}
+
+status print_extern(file_context *src, file_context *dest) {
+    int i;
+    int error_flag = 0;
+    symbol *runner = NULL;
+    data_image *d_runner = NULL;
+
+    for (i = 0; i < symbol_count; i++) {
+        runner = symbol_table[i];
+        if (runner && runner->sym_dir == EXTERN) {
+            d_runner = runner->data;
+
+            if (runner->is_missing_info) {
+                error_flag = 1;
+                handle_error(ERR_LABEL_DOES_NOT_EXIST, src, runner->label, runner->lc);
+                continue;
+            }
+            else if (!d_runner) {
+                error_flag = 1;
+                handle_error(TERMINATE, "print_extern()");
+                continue;
+            }
+            else if (!error_flag)
+                fprintf(stdout, "%s\t%d\n", runner->label, runner->data->data_address);
+            //  fprintf(dest->file_ptr, "%s\t%d\n", runner->label, runner->address_decimal);
+        }
+    }
+    if (error_flag)
+        return TERMINATE;
+    return NO_ERROR;
 }
