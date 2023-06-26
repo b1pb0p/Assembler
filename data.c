@@ -224,7 +224,7 @@ status create_base64_word(data_image* data) {
  * @param lc The location counter value for the data image.
  * @return A pointer to the newly created data image, or NULL if memory allocation fails.
  */
-data_image* create_data_image(int lc) {
+data_image* create_data_image(int lc, int *address) {
     data_image* p_ret = malloc(sizeof(data_image));
     if (!p_ret) {
         handle_error(ERR_MEM_ALLOC);
@@ -244,6 +244,7 @@ data_image* create_data_image(int lc) {
 
     p_ret->is_word_complete = 0;
     p_ret->lc = lc;
+    p_ret->data_address = (*address)++;
 
     return p_ret;
 }
@@ -478,20 +479,12 @@ status is_legal_addressing(Command cmd, Addressing_modes src, Addressing_modes d
 void free_symbol(symbol** symbol_t) {
     if (!symbol_t || !(*symbol_t)) return;
 
-    if ((*symbol_t)->label) {
+    if ((*symbol_t)->label)
         free((*symbol_t)->label);
-        (*symbol_t)->label = NULL;
-    }
-
-    if ((*symbol_t)->address_binary) {
+    if ((*symbol_t)->address_binary)
         free((*symbol_t)->address_binary);
-        (*symbol_t)->address_binary = NULL;
-    }
-
-    if ((*symbol_t)->data) {
+    if ((*symbol_t)->data)
         free_data_image(&(*symbol_t)->data);
-        (*symbol_t)->data = NULL;
-    }
 
     free(*symbol_t);
     *symbol_t = NULL;

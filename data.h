@@ -32,9 +32,10 @@ typedef struct {
     concat_actions concat;
     symbol *p_sym;
 
-    int is_word_complete;
     int *value;
+    int is_word_complete;
     int lc;
+    int data_address;
 
 } data_image;
 
@@ -44,7 +45,9 @@ struct symbol {
 
     int address_decimal;
     int is_missing_info;
+    int lc;
 
+    Directive sym_dir;
     data_image *data;
 };
 
@@ -61,7 +64,7 @@ void free_strings(int num_strings, ...);
 status create_base64_word(data_image* data);
 status is_legal_addressing(Command cmd, Addressing_modes src, Addressing_modes dest);
 
-data_image* create_data_image(int lc);
+data_image* create_data_image(int lc, int *address);
 
 Addressing_modes get_addressing_mode(file_context *src, const char *word);
 
