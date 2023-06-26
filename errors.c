@@ -14,7 +14,7 @@
 const char *msg[MSG_LEN] = {
         "Assembly completed without errors. Output file(s) generated.",
         "Assembly terminated with errors. No output file(s) generated.",
-        "Internal Error - Invalid function call - %s.",
+        "Invalid function call - %s.",
         "Assembler - Memory allocation error.",
         "Assembler - Unable to open file - %s",
         "Assembler - File opened successfully - %s.",
@@ -27,7 +27,7 @@ const char *msg[MSG_LEN] = {
         "%s - Invalid %s (%s) call on line %d.",
         "%s - Excessive comma on line %d.",
         "%s - Duplicate label declaration on line %d.",
-        "%s - Label defined at the beginning of the extern line is meaningless and will be ignored. on line %d.",
+        "%s - Label defined at the beginning of an %s line is meaningless and will be ignored. on line %d.",
         "%s - Label declared/ used in forbidden context on line %d",
         "%s - Invalid register used on line %d.",
         "%s - Extraneous text on line %d.",
@@ -65,8 +65,8 @@ const char *msg[MSG_LEN] = {
 void handle_error(status code, ...) {
     va_list args;
     file_context *fc = NULL;
-    data_image *data = NULL;
     int num, tot;
+    Directive dir;
     char *fncall, *fncall_par;
 
     va_start(args, code);
@@ -77,13 +77,14 @@ void handle_error(status code, ...) {
         fprintf(stderr, "TERMINATED ->\t%s", msg[code]);
     else if (code == TERMINATE || code == ERR_FOUND_ASSEMBLER) {
         fncall =  va_arg(args, char *);
-        fprintf(stderr, "TERMINATED ->\t");
+        fprintf(stderr, "INTERNAL ERROR ->\t");
         fprintf(stderr, msg[code], fncall);
     }
     else if (code == WARN_MEANINGLESS_LABEL) {
         fc = va_arg(args, file_context*);
+        dir = va_arg(args, Directive);
         fprintf(stderr, "WARNING ->\t");
-        fprintf(stderr, msg[code], fc->file_name, fc->lc);
+        fprintf(stderr, msg[code], fc->file_name, dir == ENTRY ? "entry" : "extern", fc->lc);
     }
     else if (code == ERR_PRE || code == ERR_FIRST_PASS) {
         fprintf(stderr, "ERROR ->\t");
@@ -99,8 +100,9 @@ void handle_error(status code, ...) {
         if (code < OPEN_FILE)
             fprintf(stderr, msg[code], fc->file_name);
         else if (code == ERR_LABEL_DOES_NOT_EXIST) {
-            data = va_arg(args, data_image*);
-            fprintf(stderr, msg[code], fc->file_name, data->p_sym->label, data->lc);
+            fncall = va_arg(args, char*);
+            num = va_arg(args, int);
+            fprintf(stderr, msg[code], fc->file_name, fncall, num);
         }
         else if (code == ERR_INVALID_ACTION || code == ERR_ILLEGAL_CHARS || code == ERR_INVALID_SYNTAX) {
             fncall_par = va_arg(args, char*);
