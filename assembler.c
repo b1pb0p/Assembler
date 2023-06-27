@@ -28,10 +28,10 @@ status preprocess_file(const char* file_name, file_context** dest , int index, i
 void test() { /** TODO: remove after testing!! */
 #define number_of_lines 4
     symbol *sym = NULL;
-
+    FILE* previousStderr = freopen("debug/error.log", "w", stderr);
     void test_out(file_context *src);
     char *data_lines[number_of_lines] = {
-            "LENGTH: .data XYZ ,   -9,15",
+            "LENGTH: .data XYZ , -9,15",
             ".data LENGTH,9, 7, 9",
             "XYZ: .data 51",
             ".data 6,-9,15, 22"
@@ -40,14 +40,19 @@ void test() { /** TODO: remove after testing!! */
 
     char *str_lines[number_of_lines] = {
             "STR: .string \"abcdef\"",
-            ".string 9",
+            ".string HELLO",
             "LONG: .string \"bar\"",
             ".string LONG, STR, \"r\""
     };
 
     char *ent_lines[number_of_lines] = {
-            "VAR: .entry HELLO, LENGTH, XYZ",
+            "VAR: .entry LENGTH, XYZ",
             ".entry LONG"
+    };
+
+    char *ext_lines[number_of_lines] = {
+            "VAL: .extern PI",
+            ".extern PI, HELLO"
     };
 
     char label[36];
@@ -96,28 +101,38 @@ void test() { /** TODO: remove after testing!! */
     }
 
     for (i = 0; i < number_of_lines - 2; i++) {
-        printf("\n %d line \n",++fc->lc);
+        printf("\n %d line \n", ++fc->lc);
 
         if (i == 0) {
             size = get_word(&ent_lines[i], label, SPACE);
-            printf("Processing ... %s\n",ent_lines[i]);
+            printf("Processing ... %s\n", ent_lines[i]);
             get_word(&ent_lines[i], temp, SPACE);
-            (void)declare_label(fc, label, size, &code);
+            (void) declare_label(fc, label, size, &code);
             process_directive(fc, ENTRY, label, ent_lines[i], &code);
-        }
-        else if (i == 1) {
-            (void)get_word(&ent_lines[i], label, SPACE);
-            printf("Processing ... %s\n",ent_lines[i]);
+        } else if (i == 1) {
+            (void) get_word(&ent_lines[i], label, SPACE);
+            printf("Processing ... %s\n", ent_lines[i]);
             process_directive(fc, ENTRY, NULL, ent_lines[i], &code);
         }
-        else {
-//            (void)get_word(&ent_lines[i], label, SPACE);
-//            printf("Processing ... %s\n",ent_lines[i]);
-//            sym = declare_label(fc, label, size, &code);
+    }
+
+    for (i = 0; i < number_of_lines - 2; i++) {
+        printf("\n %d line \n", ++fc->lc);
+
+        if (i == 0) {
+            size = get_word(&ext_lines[i], label, SPACE);
+            printf("Processing ... %s\n", ext_lines[i]);
+            get_word(&ext_lines[i], temp, SPACE);
+            (void) declare_label(fc, label, size, &code);
+            process_directive(fc, EXTERN, label, ext_lines[i], &code);
+        } else if (i == 1) {
+            (void) get_word(&ext_lines[i], label, SPACE);
+            printf("Processing ... %s\n", ext_lines[i]);
+            process_directive(fc, EXTERN, NULL, ext_lines[i], &code);
         }
     }
-test_out(fc);
-
+    test_out(fc);
+    freopen("/dev/tty", "w", stderr);
 }
 /** TODO: remove after testing!! */
 
