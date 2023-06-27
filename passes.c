@@ -150,11 +150,12 @@ void process_data(file_context *src, const char *label, char *line, status *repo
     char word[MAX_LABEL_LENGTH];
     int is_first_value = 0;
     int *value = NULL;
-    status temp_report = NO_ERROR;
+    status temp_report;
     Value val_type;
     data_image *p_data = NULL;
 
     while (*line != '\n' && *line != '\0' && get_word(&line,word,COMMA) != 0) {
+        temp_report = NO_ERROR;
         val_type = line_parser(src, DATA, &line, word, &temp_report);
         *report = temp_report == NO_ERROR ? *report : temp_report;
 
@@ -166,7 +167,7 @@ void process_data(file_context *src, const char *label, char *line, status *repo
 
         if (label && !strncmp(label, word, strlen(label))) {
             *report = ERR_FORBIDDEN_LABEL_DECLARE;
-            handle_error(ERR_FORBIDDEN_LABEL_DECLARE, src);
+            handle_error(ERR_FORBIDDEN_LABEL_DECLARE, src, label);
             is_first_value = 1;
             continue;
         }
@@ -194,10 +195,11 @@ void process_string(file_context *src, const char *label, char *line, status *re
     char p_ch, *word = NULL, *p_word = NULL;
     int is_first_char, is_first_value = 0, *value = NULL;
     data_image *p_data = NULL;
-    status temp_report = NO_ERROR;
+    status temp_report;
     Value val_type;
 
     while (is_valid_string(&line, &word, report)) { /* Process each string */
+        temp_report = NO_ERROR;
         val_type = line_parser(src, STRING, &line, word, &temp_report);
         *report = temp_report == NO_ERROR ? *report : temp_report;
 
@@ -210,7 +212,7 @@ void process_string(file_context *src, const char *label, char *line, status *re
 
         if (label && !strncmp(label, word, strlen(label))) {
             *report = ERR_FORBIDDEN_LABEL_DECLARE;
-            handle_error(ERR_FORBIDDEN_LABEL_DECLARE, src);
+            handle_error(ERR_FORBIDDEN_LABEL_DECLARE, src, label);
             is_first_value = 1;
             continue;
         }
@@ -257,16 +259,32 @@ void process_directive(file_context *src, Directive dir, const char *label, char
     symbol *sym = NULL;
 
     if (label)
-        handle_error(WARN_MEANINGLESS_LABEL, src, dir);
+        handle_error(WARN_MEANINGLESS_LABEL, src, label, dir);
 
     while (*line != '\n' && *line != '\0' && get_word(&line,word,COMMA) != 0) {
         (void) line_parser(src, dir, &line, word, report);
         sym = add_symbol(src, word, INVALID_ADDRESS, report);
 
         if (!sym)
-            return;
+            continue;
+        if (dir == EXTERN && !sym->is_missing_info) {
+            handle_error(ERR_FORBIDDEN_LABEL_DECLARE, src, sym->label);
+            *report = ERR_FORBIDDEN_LABEL_DECLARE;
+            continue;
+        }
+        else if (sym->sym_dir != DEFAULT && sym->sym_dir != dir) {
+            handle_error(ERR_BOTH_DIR, src, sym->label);
+            *report = ERR_BOTH_DIR;
+            continue;
+        }
+        else if (sym->sym_dir == dir) {
+            handle_error(ERR_DUPLICATE_DIR, src, sym->label, dir);
+            *report = ERR_DUPLICATE_DIR;
+            continue;
+        }
 
         sym->sym_dir = dir;
+        if (sym->data) sym->data->directive = dir;
     }
 }
 
@@ -585,8 +603,6 @@ data_image* add_data_image(file_context *src, const char* label, status *report)
     return new_image;
 }
 
-
-
 symbol* declare_label(file_context *src, char *label, size_t label_len, status *report) {
     symbol *sym = NULL;
     if (!strncpy(label, label, label_len - 1)) {
@@ -673,7 +689,7 @@ Value validate_data(file_context *src, char *word, size_t length, status *report
     if (isalpha(*word)) {
         if (word[length - 1] == ':') {
             word[length - 1] = '\0';
-            handle_error(ERR_FORBIDDEN_LABEL_DECLARE, src);
+            handle_error(ERR_FORBIDDEN_LABEL_DECLARE, src, word);
             *report =  ERR_FORBIDDEN_LABEL_DECLARE;
         }
         temp_report = is_valid_label(word);
@@ -835,12 +851,21 @@ void cleanup(file_context **src) {
 void test_out(file_context *src) { /*TODO: REMOVE */
     size_t i;
     int error_flag = 0;
+    status report;
     data_image *runner = NULL;
     status print_extern(file_context *src, file_context *dest);
     status print_entry(file_context *src, file_context *dest);
 
-    printf("\n***** TESTING *****\n");
     if (!data_arr_obj_index) return;
+
+    printf("\n***** TESTING *****\n");
+    printf("\n***** START: print_extern *****\n");
+    report =  print_extern(src,src);
+    printf("***** END: print_extern - STATUS: %s *****\n", report != NO_ERROR ? "Failed" : "Passed");
+    printf("\n***** START: print_entry *****\n");
+    report =  print_entry(src,src);
+    printf("***** END: print_entry - STATUS: %s *****\n", report != NO_ERROR ? "Failed" : "Passed");
+    printf("\n\n***** START: print data_images *****\n");
 
     for (i = 0; i < data_arr_obj_index; i++) {
         runner = data_img_obj[i];
@@ -856,18 +881,13 @@ void test_out(file_context *src) { /*TODO: REMOVE */
         if (!error_flag) printf("Data_image: @%p, value: %d\n",data_img_obj[i], *(data_img_obj[i]->value));
     }
 
-    if (error_flag) {
-        return;
-    }
-
     printf("DC: %lu\t | Actual Memory allocation for data_image: %lu\nBase-64 Words:\n",
            (unsigned long)DC, (unsigned long)data_arr_obj_index);
-    for (i = 0; i < data_arr_obj_index; i++) {
+    for (i = 0; i < data_arr_obj_index && !error_flag; i++) {
         create_base64_word(data_img_obj[i]);
         printf("Data_image: @%p, value: %s\n",data_img_obj[i], data_img_obj[i]->base64_word);
     }
-    printf("\n");
-    (void) print_entry(src,src);
+    printf("\n***** END: print data_images - STATUS: %s *****\n", error_flag ? "Failed" : "Passed");
 }
 
 status print_entry(file_context *src, file_context *dest) {
@@ -896,30 +916,30 @@ status print_entry(file_context *src, file_context *dest) {
 status print_extern(file_context *src, file_context *dest) {
     int i;
     int error_flag = 0;
-    symbol *runner = NULL;
-    data_image *d_runner = NULL;
+    data_image *runner = NULL;
+    symbol *sym = NULL;
 
+    for (i = 0; i < data_arr_obj_index; i++) {
+        runner = data_img_obj[i];
+
+        if (runner && runner->p_sym && runner->p_sym->sym_dir == EXTERN) {
+            if (!(runner->value = malloc(sizeof (int)))) {
+                handle_error(ERR_MEM_ALLOC);
+                return ERR_MEM_ALLOC;
+            }
+            runner->p_sym->is_missing_info = 0;
+            runner->p_sym->address_decimal = 0;
+            *(runner->value) = 0;
+            fprintf(stdout, "%s\t%d\n", runner->p_sym->label, runner->data_address);
+        }
+        //  fprintf(dest->file_ptr, "%s\t%d\n", runner->p_sym->label, runner->data_address);
+    }
     for (i = 0; i < symbol_count; i++) {
-        runner = symbol_table[i];
-        if (runner && runner->sym_dir == EXTERN) {
-            d_runner = runner->data;
-
-            if (runner->is_missing_info) {
-                error_flag = 1;
-                handle_error(ERR_LABEL_DOES_NOT_EXIST, src, runner->label, runner->lc);
-                continue;
-            }
-            else if (!d_runner) {
-                error_flag = 1;
-                handle_error(TERMINATE, "print_extern()");
-                continue;
-            }
-            else if (!error_flag)
-                fprintf(stdout, "%s\t%d\n", runner->label, runner->data->data_address);
-            //  fprintf(dest->file_ptr, "%s\t%d\n", runner->label, runner->address_decimal);
+        sym = symbol_table[i];
+        if (sym->sym_dir == EXTERN && sym->is_missing_info) {
+            error_flag = 1;
+            handle_error(WARN_UNUSED_EXT, src, sym->label, sym->lc);
         }
     }
-    if (error_flag)
-        return TERMINATE;
-    return NO_ERROR;
+    return error_flag ? FAILURE : NO_ERROR;
 }
