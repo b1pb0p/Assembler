@@ -1,0 +1,4 @@
+WARNING ->	as.as - Label (VAR) defined at the beginning of an entry line is meaningless and will be ignored. on line 9.
+WARNING ->	as.as - Label (VAL) defined at the beginning of an extern line is meaningless and will be ignored. on line 11.
+ERROR ->	as.as - Duplicate extern declaration (PI) on line 12.
+WARNING ->	as.as - Unused extern label (PI) on line 11.
