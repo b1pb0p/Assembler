@@ -24,11 +24,11 @@ const char *msg[MSG_LEN] = {
         "%s - Missing operand on line %d.",
         "%s - Too many operands on line %d.",
         "%s - Illegal use of operand on line %d.",
-        "%s - Invalid %s (%s) call on line %d.",
+        "%s - Invalid %s call (%s) on line %d.",
         "%s - Excessive comma on line %d.",
         "%s - Duplicate label declaration on line %d.",
-        "%s - Label defined at the beginning of an %s line is meaningless and will be ignored. on line %d.",
-        "%s - Label declared/ used in forbidden context on line %d",
+        "%s - Label (%s) defined at the beginning of an %s line is meaningless and will be ignored. on line %d.",
+        "%s - Unused extern label (%s) on line %d.",
         "%s - Invalid register used on line %d.",
         "%s - Extraneous text on line %d.",
         "%s - Missing '\"' symbol on line %d.",
@@ -40,8 +40,11 @@ const char *msg[MSG_LEN] = {
         "%s - Invalid macro name (%s) on line %d.",
         "%s - Label (%s) cannot start with a digit on line %d",
         "%s - %s (%s) contains illegal characters on line %d",
+        "%s - Duplicate %s declaration (%s) on line %d.",
         "%s - Label (%s) does not exist on line %d.",
         "%s - Invalid Command or Directive after %s, (%s) on line %d.",
+        "%s - Label (%s) cannot act as both entry and extern on line %d",
+        "%s - Label (%s) is been declared / used in forbidden context on line %d",
         "%s - Invalid label name (%s) on line %d.",
         "%s - Duplicate macro name on line %d.",
         "%s - Missing opening 'mcro' on line %d.",
@@ -82,9 +85,24 @@ void handle_error(status code, ...) {
     }
     else if (code == WARN_MEANINGLESS_LABEL) {
         fc = va_arg(args, file_context*);
+        fncall =  va_arg(args, char *);
         dir = va_arg(args, Directive);
         fprintf(stderr, "WARNING ->\t");
-        fprintf(stderr, msg[code], fc->file_name, dir == ENTRY ? "entry" : "extern", fc->lc);
+        fprintf(stderr, msg[code], fc->file_name, fncall, dir == ENTRY ? "entry" : "extern", fc->lc);
+    }
+    else if (code ==  ERR_DUPLICATE_DIR) {
+        fc = va_arg(args, file_context*);
+        fncall =  va_arg(args, char *);
+        dir = va_arg(args, Directive);
+        fprintf(stderr, "ERROR ->\t");
+        fprintf(stderr, msg[code], fc->file_name, dir == ENTRY ? "entry" : "extern", fncall, fc->lc);
+    }
+    else if (code == WARN_UNUSED_EXT) {
+        fc = va_arg(args, file_context*);
+        fncall = va_arg(args, char *);
+        num = va_arg(args, int);
+        fprintf(stderr, "WARNING ->\t");
+        fprintf(stderr, msg[code], fc->file_name, fncall, num);
     }
     else if (code == ERR_PRE || code == ERR_FIRST_PASS) {
         fprintf(stderr, "ERROR ->\t");
@@ -108,7 +126,7 @@ void handle_error(status code, ...) {
             fncall_par = va_arg(args, char*);
             fncall = va_arg(args, char*);
             fprintf(stderr, msg[code], fc->file_name, tolower(*fncall_par) == 'l' ? "label declaration"
-                                                                                  : *fncall_par == 'd' ? "data assigment" : "string assigment", fncall, fc->lc);
+                                  : *fncall_par == 'd' ? "data assigment" : "string assigment", fncall, fc->lc);
         }
         else if (code >= ERR_INVAL_MACRO_NAME && code <= ERR_INVALID_LABEL) {
             fncall = va_arg(args, char*);
