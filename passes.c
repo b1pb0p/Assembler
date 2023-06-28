@@ -110,7 +110,7 @@ void handle_processing_line(file_context *src, char *line, symbol *sym, status *
     char *p_label = NULL;
     data_image *p_data_image = NULL;
     Directive dir = 0;
-    Command cmd = 0;
+    Command cmd = INV_CMD;
     size_t word_len;
     int condition;
 
@@ -118,7 +118,7 @@ void handle_processing_line(file_context *src, char *line, symbol *sym, status *
     if (sym) p_label = sym->label;
 
     condition = word_len && !is_label(src, next_word, NULL) &&
-                ((dir = is_directive(next_word + 1) || (cmd = is_command(next_word))));
+                ((dir = is_directive(next_word + 1) || (cmd = is_command(next_word)) != INV_CMD));
 
     if (!condition)  {
         *report = FAILURE;
@@ -130,12 +130,10 @@ void handle_processing_line(file_context *src, char *line, symbol *sym, status *
         p_data_image->binary_opcode = decimal_to_binary12(cmd);
         if (!p_data_image->binary_opcode) *report = FAILURE;
     }
-    else if (dir == ENTRY || dir == EXTERN) {
-        /* *report = dir == ENTRY ? process_entry() : process_extern(); */
-    }
-    else if (dir == STRING || dir == DATA) {
+    else if (dir == ENTRY || dir == EXTERN)
+        process_directive(src, dir, p_label, line, report);
+    else if (dir == STRING || dir == DATA)
         dir == STRING ? process_string(src, p_label, line, report) : process_data(src, p_label, line, report);
-    }
 }
 
 /**
@@ -288,6 +286,53 @@ void process_directive(file_context *src, Directive dir, const char *label, char
     }
 }
 
+void process_command(file_context *src,  Command cmd, const char *label, char *line, status *report) {
+    status temp_report = NO_ERROR;
+
+
+
+
+//    else {/* A label can only be associated with the initial value */
+//        if (!(*p_data = add_data_image(src, NULL, report)) && *report == ERR_MEM_ALLOC)
+//            return;
+//    }
+
+    if (!(p_data = add_data_image(src, label, report)) && *report == ERR_MEM_ALLOC)
+        return;
+
+    if (cmd == RTS || cmd == STOP)
+        handle_no_operands(src, cmd, label, line, &temp_report);
+    else if (cmd >= INC && cmd <= JSR || cmd >= NOT && cmd <= CLR) {
+        handle_one_operand(src, cmd, label, line, &temp_report);
+    }
+
+}
+
+void handle_no_operands(file_context *src, Command cmd, const char *label, char *line, status *report) {
+    data_image *p_data = NULL;
+    /*TODO HANDLE LABEL */
+
+    if (!(p_data = add_data_image(src, label, report)) && *report == ERR_MEM_ALLOC)
+        return;
+    else if (get_word_length(&line)) {
+        *report = ERR_EXTRA_TEXT;
+        handle_error(ERR_EXTRA_TEXT, src);
+        return;
+    }
+    else if (!(p_data->base64_word = convert_bin_to_base64(decimal_to_binary12(cmd)))) {
+        *report = ERR_MEM_ALLOC;
+        return;
+    }
+    p_data->is_word_complete = 1;
+}
+
+void handle_one_operand(file_context *src, Command cmd, const char *label, char *line, status *report) {
+    if (!(p_data->binary_opcode = decimal_to_binary12(cmd)) ||
+        !(p_data->binary_src = decimal_to_binary12(ZERO))   ||
+        !(p_data->binary_src = decimal_to_binary12(ZERO)))
+        *report = FAILURE;
+}
+
 Value line_parser(file_context *src, Directive dir, char **line, char *word, status *report) {
     size_t length;
 
@@ -382,89 +427,6 @@ status string_parser(file_context *src, char **word, char *ch, status *report) {
     (*word)++;
     return ret_val;
 }
-
-/**
-* Generates the output file for the object code.
-*
-* Generate the object output file based on the data image and symbol table.
-*
-* @param file_name The name of the output file.
-* @param ic The instruction count (IC).
-* @param dc The data count (DC).
-* @return The status of the operation. Returns NO_ERROR on success, or FAILURE if an error occurred.
-*/
-status generate_obj_output(const char *file_name, size_t ic, size_t dc) {
-    int i;
-    status report = NO_ERROR;
-    file_context *obj_file = create_file_context(file_name, OBJECT_EXT, FILE_EXT_LEN, FILE_MODE_WRITE, &report);
-
-    if (!obj_file)
-        return FAILURE;
-
-    fprintf(obj_file->file_ptr, "%lu %lu\n", (unsigned long)ic, (unsigned long)dc);
-
-    for (i = 0; i < data_arr_obj_index; i++) {
-        if (!(*data_img_obj[i]).is_word_complete)
-            report = FAILURE;
-
-        // (*data_img_obj[i]).base64_word = convert_bin_to_base64((*data_img_obj)->symbol_t->address_binary);
-        if (!(*data_img_obj[i]).base64_word)
-            report = FAILURE;
-
-        fprintf(obj_file->file_ptr, "%s\n", (*data_img_obj[i]).base64_word);
-    }
-    free_file_context(&obj_file);
-    return report;
-}
-
-/**
- * Generates the output file for entry or extern directives.
- *
- * This function generates the output file for entry or extern directives, containing
- * the corresponding symbol labels and their decimal addresses.
- *
- * @param file_name The name of the output file.
- * @param ext The file extension for the output file.
- * @param target The target Directive (ENTRY or EXTERN).
- * @return The status of the operation. Returns NO_ERROR on success, or FAILURE if an error occurred.
- */
-status generate_directive_output(file_context  *src, Directive dir) {
-    int i;
-    int error_flag = 0;
-    symbol *runner = NULL;
-    data_image *d_runner = NULL;
-    status report = NO_ERROR;
-    file_context *dest = create_file_context(src->file_name_wout_ext,
-    dir == EXTERN ? EXTERNAL_EXT : ENTRY_EXT, FILE_EXT_LEN_OUT, FILE_MODE_WRITE, &report);
-
-    if (!dest)
-        return FAILURE;
-
-    for (i = 0; i < symbol_count; i++) {
-        runner = symbol_table[i];
-        if (runner && runner->sym_dir == dir) {
-            d_runner = dir == EXTERN ? runner->data : NULL;
-
-            if (runner->is_missing_info) {
-                error_flag = 1;
-                handle_error(ERR_LABEL_DOES_NOT_EXIST, src, runner->label, runner->lc);
-                continue;
-            }
-            else if (dir == EXTERN && !d_runner) {
-                error_flag = 1;
-                handle_error(TERMINATE, "generate_directive_output()");
-                continue;
-            }
-            else if (!error_flag)
-                fprintf(dest->file_ptr, "%s\t%d\n", runner->label,
-                        dir == EXTERN ? runner->data->data_address :runner->address_decimal);
-        }
-    }
-
-    free_file_context(&dest);
-    return report;
-}
-
 
 /**
  * Find a symbol in the symbol table based on its label.
@@ -610,12 +572,11 @@ symbol* declare_label(file_context *src, char *label, size_t label_len, status *
         return NULL;
     }
 
+    if (!is_label(src, label, report))
+        return NULL;
+
     if (label[label_len - 1] == ':')
         label[label_len - 1] = '\0';
-    else {
-        handle_error(ERR_MISSING_COLON, src);
-        *report = ERR_MISSING_COLON;
-    }
 
     sym = add_symbol(src, label, next_free_address, report);
     next_free_address = sym ? next_free_address + 1 : next_free_address;
@@ -641,7 +602,8 @@ status is_valid_label(const char *label) {
     int i;
 
     if (!label || length == 0  || length > MAX_LABEL_LENGTH ||
-        is_command(label) || is_directive(label + 1))
+        is_command(label) == INV_CMD || is_directive(label + 1) ||
+        is_directive(label))
         return ERR_INVALID_LABEL;
 
     if (isdigit(*label))
@@ -650,9 +612,12 @@ status is_valid_label(const char *label) {
     if (!isalpha(*label))
         return ERR_ILLEGAL_CHARS;
 
-    for (i = 1; i < length; i++)
+    for (i = 1; i < length - 1; i++)
         if (!isalnum(label[i]))
             return ERR_ILLEGAL_CHARS;
+
+    if (label[length - 1] != ':' && !isalnum(label[length - 1]))
+        return ERR_ILLEGAL_CHARS;
 
     if (label[length - 1] == ':')
         return NO_ERROR;
@@ -675,7 +640,8 @@ int is_label(file_context *src, const char *label, status *report) {
         return 0;
     }
 
-    ret_val == ERR_MISSING_COLON ? handle_error(ret_val, src) : handle_error(ret_val, src, label);
+    ret_val == ERR_MISSING_COLON ? handle_error(ret_val, src) : ret_val == ERR_ILLEGAL_CHARS ?
+    handle_error(ret_val, src, "Label",label) : handle_error(ret_val, src, label);
     return 1;
 }
 
@@ -821,6 +787,147 @@ int is_valid_register(const char* str) {
 }
 
 /**
+* Generates the output file for the object code.
+*
+* Generate the object output file based on the data image and symbol table.
+*
+* @param file_name The name of the output file.
+* @param ic The instruction count (IC).
+* @param dc The data count (DC).
+* @return The status of the operation. Returns NO_ERROR on success, or FAILURE if an error occurred.
+*/
+status generate_obj_output(const char *file_name, size_t ic, size_t dc) {
+    int i;
+    status report = NO_ERROR;
+    file_context *obj_file = create_file_context(file_name, OBJECT_EXT, FILE_EXT_LEN, FILE_MODE_WRITE, &report);
+
+    if (!obj_file)
+        return FAILURE;
+
+    fprintf(obj_file->file_ptr, "%lu %lu\n", (unsigned long)ic, (unsigned long)dc);
+
+    for (i = 0; i < data_arr_obj_index; i++) {
+        if (!(*data_img_obj[i]).is_word_complete)
+            report = FAILURE;
+
+        // (*data_img_obj[i]).base64_word = convert_bin_to_base64((*data_img_obj)->symbol_t->address_binary);
+        if (!(*data_img_obj[i]).base64_word)
+            report = FAILURE;
+
+        fprintf(obj_file->file_ptr, "%s\n", (*data_img_obj[i]).base64_word);
+    }
+    free_file_context(&obj_file);
+    return report;
+}
+
+/**
+ * Generates the .ent or .ext output file depending on the directive.
+ * The output is written to a file named [file_name].ent for ENTRY directive
+ * and [file_name].ext for EXTERN directive.
+ * The file_context is freed after generating the output.
+ *
+ * @param src A pointer to the source file_context.
+ * @param dir The directive to generate the output for (ENTRY or EXTERN).
+ * @return The status of the operation.
+ *         Returns NO_ERROR if the output was generated without errors,
+ *         FAILURE in case of an error,
+ *         or TERMINATE if no output was generated (no relevant directive calls).
+ */
+status generate_directive_output(file_context  *src, Directive dir) {
+    status report = NO_ERROR;
+    file_context *dest = create_file_context(src->file_name_wout_ext,dir == EXTERN ?
+    EXTERNAL_EXT : ENTRY_EXT, FILE_EXT_LEN_OUT, FILE_MODE_WRITE, &report);
+
+    if (!dest)
+        return report;
+
+    report = (dir == ENTRY) ? write_entry_to_stream(src, dest->file_ptr) :
+            write_extern_to_stream(src, dest->file_ptr);
+
+    if (report != NO_ERROR) {
+        free_file_context(&dest);
+        remove(dest->file_name);
+        return report == FAILURE ? FAILURE : NO_ERROR;
+    }
+
+    return NO_ERROR;
+}
+
+/**
+ * Writes the entry symbols and their addresses to the specified output stream.
+ * Only generates output if there are existing entry symbols.
+ *
+ * @param src The source file_context pointer.
+ * @param dest The output stream to write the entry information to.
+ * @return The status of the output generation.
+ *         Returns NO_ERROR if output was generated and no errors were encountered,
+ *         TERMINATE if no output was generated (no entry symbols),
+ *         or FAILURE in case of an error.
+ */
+status write_entry_to_stream(file_context *src, FILE *dest) {
+    int i;
+    int error_flag = 0;
+    int has_entry = 0;
+    symbol *runner = NULL;
+
+    for (i = 0; i < symbol_count; i++) {
+        runner = symbol_table[i];
+        if (runner && runner->sym_dir == ENTRY) {
+            has_entry = 1;
+            if (runner->is_missing_info) {
+                error_flag = 1;
+                handle_error(ERR_LABEL_DOES_NOT_EXIST, src, runner->label, runner->lc);
+                continue;
+            }
+            if (!error_flag)
+                fprintf(dest, "%s\t%d\n", runner->label, runner->address_decimal);
+        }
+    }
+    return error_flag ? FAILURE : !has_entry ? TERMINATE : NO_ERROR;
+}
+
+/**
+ * Writes the extern symbols and their addresses to the specified output stream.
+ *
+ * @param src The source file_context pointer.
+ * @param dest The output stream to write the extern information to.
+ * @return The status of the output generation.
+ *         Returns NO_ERROR if output was generated and no errors were encountered,
+ *         TERMINATE if no output was generated (no extern symbols),
+ *         or FAILURE in case of an error.
+ */
+status write_extern_to_stream(file_context *src, FILE *dest) {
+    int i;
+    int error_flag = 0;
+    int has_extern = 0;
+    data_image *runner = NULL;
+    symbol *sym = NULL;
+
+    for (i = 0; i < data_arr_obj_index; i++) {
+        runner = data_img_obj[i];
+        if (runner && runner->p_sym && runner->p_sym->sym_dir == EXTERN) {
+            has_extern = 1;
+            if (!(runner->value = malloc(sizeof (int)))) {
+                handle_error(ERR_MEM_ALLOC);
+                return ERR_MEM_ALLOC;
+            }
+            runner->p_sym->is_missing_info = 0;
+            runner->p_sym->address_decimal = 0;
+            *(runner->value) = 0;
+            fprintf(dest, "%s\t%d\n", runner->p_sym->label, runner->data_address);
+        }
+    }
+    for (i = 0; i < symbol_count; i++) {
+        sym = symbol_table[i];
+        if (sym->sym_dir == EXTERN && sym->is_missing_info) {
+            error_flag = 1;
+            handle_error(WARN_UNUSED_EXT, src, sym->label, sym->lc);
+        }
+    }
+    return error_flag ? FAILURE : !has_extern ? TERMINATE : NO_ERROR;
+}
+
+/**
  * Frees the global data image arrays and symbol table.
  */
 void free_global_data_and_symbol() {
@@ -846,25 +953,22 @@ void cleanup(file_context **src) {
     free_global_data_and_symbol();
 }
 
-
 /* TODO: REMOVE!!!!!!!!!!!!!!! */
 void test_out(file_context *src) { /*TODO: REMOVE */
     size_t i;
     int error_flag = 0;
     status report;
     data_image *runner = NULL;
-    status print_extern(file_context *src, file_context *dest);
-    status print_entry(file_context *src, file_context *dest);
 
     if (!data_arr_obj_index) return;
 
     printf("\n***** TESTING *****\n");
-    printf("\n***** START: print_extern *****\n");
-    report =  print_extern(src,src);
-    printf("***** END: print_extern - STATUS: %s *****\n", report != NO_ERROR ? "Failed" : "Passed");
-    printf("\n***** START: print_entry *****\n");
-    report =  print_entry(src,src);
-    printf("***** END: print_entry - STATUS: %s *****\n", report != NO_ERROR ? "Failed" : "Passed");
+    printf("\n***** START: write_extern_to_stream *****\n");
+    report = write_extern_to_stream(src, stdout);
+    printf("***** END: write_extern_to_stream - STATUS: %s *****\n", report != NO_ERROR ? "Failed" : "Passed");
+    printf("\n***** START: write_entry_to_stream *****\n");
+    report = write_entry_to_stream(src, stdout);
+    printf("***** END: write_entry_to_stream - STATUS: %s *****\n", report != NO_ERROR ? "Failed" : "Passed");
     printf("\n\n***** START: print data_images *****\n");
 
     for (i = 0; i < data_arr_obj_index; i++) {
@@ -890,56 +994,4 @@ void test_out(file_context *src) { /*TODO: REMOVE */
     printf("\n***** END: print data_images - STATUS: %s *****\n", error_flag ? "Failed" : "Passed");
 }
 
-status print_entry(file_context *src, file_context *dest) {
-    int i;
-    int error_flag = 0;
-    symbol *runner = NULL;
 
-    for (i = 0; i < symbol_count; i++) {
-        runner = symbol_table[i];
-        if (runner && runner->sym_dir == ENTRY) {
-            if (runner->is_missing_info) {
-                error_flag = 1;
-                handle_error(ERR_LABEL_DOES_NOT_EXIST, src, runner->label, runner->lc);
-                continue;
-            }
-            if (!error_flag)
-                fprintf(stdout, "%s\t%d\n", runner->label, runner->address_decimal);
-            //  fprintf(dest->file_ptr, "%s\t%d\n", runner->label, runner->address_decimal);
-        }
-    }
-    if (error_flag)
-        return TERMINATE;
-    return NO_ERROR;
-}
-
-status print_extern(file_context *src, file_context *dest) {
-    int i;
-    int error_flag = 0;
-    data_image *runner = NULL;
-    symbol *sym = NULL;
-
-    for (i = 0; i < data_arr_obj_index; i++) {
-        runner = data_img_obj[i];
-
-        if (runner && runner->p_sym && runner->p_sym->sym_dir == EXTERN) {
-            if (!(runner->value = malloc(sizeof (int)))) {
-                handle_error(ERR_MEM_ALLOC);
-                return ERR_MEM_ALLOC;
-            }
-            runner->p_sym->is_missing_info = 0;
-            runner->p_sym->address_decimal = 0;
-            *(runner->value) = 0;
-            fprintf(stdout, "%s\t%d\n", runner->p_sym->label, runner->data_address);
-        }
-        //  fprintf(dest->file_ptr, "%s\t%d\n", runner->p_sym->label, runner->data_address);
-    }
-    for (i = 0; i < symbol_count; i++) {
-        sym = symbol_table[i];
-        if (sym->sym_dir == EXTERN && sym->is_missing_info) {
-            error_flag = 1;
-            handle_error(WARN_UNUSED_EXT, src, sym->label, sym->lc);
-        }
-    }
-    return error_flag ? FAILURE : NO_ERROR;
-}

@@ -9,6 +9,7 @@
 #include "utils.h"
 
 #define REGISTER_CH '@'
+#define ZERO 0
 
 typedef enum {
     DEFAULT_12BIT,

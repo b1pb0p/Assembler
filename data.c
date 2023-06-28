@@ -146,7 +146,8 @@ char* convert_bin_to_base64(const char* binary) {
     if (!base64) {
         handle_error(ERR_MEM_ALLOC);
         return NULL;
-    }
+    } else if (!binary)
+        return NULL;
 
     if (binary[BINARY_BITS] != '\0') {
         handle_error(TERMINATE, "convert_bin_to_base64()");
@@ -412,7 +413,6 @@ Addressing_modes get_addressing_mode(file_context *src, const char *word) {
         handle_error(ERR_INVALID_REGISTER, src);
         return INVALID;
     }
-        return REGISTER;
 
     if (*word == '+' || *word == '-')
         word++;
