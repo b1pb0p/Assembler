@@ -93,8 +93,6 @@ file_context* create_file_context(const char* file_name, char* ext, size_t ext_l
     }
 
     fc->file_ptr = file;
-    fc->ic = 0;
-    fc->dc = 0;
     fc->lc = 1; /* line starts from 1 */
     *report = NO_ERROR;
     return fc;
@@ -136,6 +134,8 @@ size_t get_word_length(char **ptr) {
  */
 size_t get_word(char **ptr, char *word, Delimiter delimiter) {
     size_t length = 0;
+
+    if (!word) return 0;
 
     while (**ptr && isspace((int)**ptr))
         (*ptr)++;
@@ -298,7 +298,7 @@ Command is_command(const char* src) {
     if (src)
         for (i = 0; i < COMMANDS_LEN; i++)
             if (strcmp(src, commands[i]) == 0)
-                return i + 1; /* Corresponding Command*/
+                return i; /* Corresponding Command*/
     return 0;
 }
 

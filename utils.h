@@ -50,7 +50,7 @@ typedef enum {
 } Addressing_modes;
 
 typedef enum {
-    MOV = 1,
+    MOV,
     CMP,
     ADD,
     SUB,
@@ -65,7 +65,8 @@ typedef enum {
     PRN,
     JSR,
     RTS,
-    STOP
+    STOP,
+    INV_CMD
 } Command;
 
 typedef enum {
@@ -78,8 +79,6 @@ typedef struct {
     FILE* file_ptr;
     char* file_name;
     char* file_name_wout_ext;
-    int ic; /* Instructions counter */
-    int dc; /* Data counter */ //todo: remove?
     int lc; /* Line counter */
 } file_context;
 

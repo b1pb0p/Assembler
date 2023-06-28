@@ -157,13 +157,13 @@ status handle_macro_start(file_context *src, char *line, int *found_macro,
                     report = FAILURE;
             }
 
-            if ((inval = is_directive(word + 1))) {
+            if ((inval = is_directive(word + 1)) || (inval = is_directive(word))) {
                 handle_error(ERR_INVAL_MACRO_NAME, src, directives[inval - 1]);
                 report = FAILURE;
             }
 
-            if ((inval = is_command(word))) {
-                handle_error(ERR_INVAL_MACRO_NAME, src, commands[inval - 1]);
+            if ((inval = is_command(word)) && inval != INV_CMD) {
+                handle_error(ERR_INVAL_MACRO_NAME, src, commands[inval]);
                 report = FAILURE;
             }
 

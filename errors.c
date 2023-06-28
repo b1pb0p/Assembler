@@ -8,7 +8,6 @@
 #include <ctype.h>
 #include "errors.h"
 #include "utils.h"
-#include "data.h"
 
 /* Status messages */
 const char *msg[MSG_LEN] = {
@@ -19,8 +18,8 @@ const char *msg[MSG_LEN] = {
         "Assembler - Unable to open file - %s",
         "Assembler - File opened successfully - %s.",
         "%s - Line cannot start with a number on line %d",
-        "%s - Invalid opcode on line %d.",
-        "%s - Invalid operand on line %d.",
+        "%s - Invalid opcode (%s) on line %d.",
+        "%s - Invalid operand (%s) on line %d.",
         "%s - Missing operand on line %d.",
         "%s - Too many operands on line %d.",
         "%s - Illegal use of operand on line %d.",
@@ -39,7 +38,7 @@ const char *msg[MSG_LEN] = {
         "%s - Macro too long on line %d. Cannot exceed 31 characters.",
         "%s - Invalid macro name (%s) on line %d.",
         "%s - Label (%s) cannot start with a digit on line %d",
-        "%s - %s (%s) contains illegal characters on line %d",
+        "%s - Invalid %s (%s) contains illegal characters on line %d",
         "%s - Duplicate %s declaration (%s) on line %d.",
         "%s - Label (%s) does not exist on line %d.",
         "%s - Invalid Command or Directive after %s, (%s) on line %d.",
@@ -80,7 +79,7 @@ void handle_error(status code, ...) {
         fprintf(stderr, "TERMINATED ->\t%s", msg[code]);
     else if (code == TERMINATE || code == ERR_FOUND_ASSEMBLER) {
         fncall =  va_arg(args, char *);
-        fprintf(stderr, "INTERNAL ERROR ->\t");
+        fprintf(stderr, code == TERMINATE ? "INTERNAL ERROR ->\t" : "TERMINATED ->\t");
         fprintf(stderr, msg[code], fncall);
     }
     else if (code == WARN_MEANINGLESS_LABEL) {
@@ -128,7 +127,8 @@ void handle_error(status code, ...) {
             fprintf(stderr, msg[code], fc->file_name, tolower(*fncall_par) == 'l' ? "label declaration"
                                   : *fncall_par == 'd' ? "data assigment" : "string assigment", fncall, fc->lc);
         }
-        else if (code >= ERR_INVAL_MACRO_NAME && code <= ERR_INVALID_LABEL) {
+        else if (code >= ERR_INVAL_MACRO_NAME && code <= ERR_INVALID_LABEL
+        || code >= ERR_INVALID_OPCODE && code <= ERR_INVALID_OPERAND) {
             fncall = va_arg(args, char*);
             fprintf(stderr, msg[code], fc->file_name, fncall ,fc->lc);
         }
