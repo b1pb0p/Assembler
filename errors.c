@@ -19,10 +19,9 @@ const char *msg[MSG_LEN] = {
         "Assembler - File opened successfully - %s.",
         "%s - Line cannot start with a number on line %d",
         "%s - Invalid opcode (%s) on line %d.",
-        "%s - Invalid operand (%s) on line %d.",
-        "%s - Missing operand on line %d.",
+        "%s - Invalid operand(s) on line %d.",
+        "%s - Missing operand(s) on line %d.",
         "%s - Too many operands on line %d.",
-        "%s - Illegal use of operand on line %d.",
         "%s - Invalid %s call (%s) on line %d.",
         "%s - Excessive comma on line %d.",
         "%s - Duplicate label declaration on line %d.",
@@ -128,11 +127,11 @@ void handle_error(status code, ...) {
                                   : *fncall_par == 'd' ? "data assigment" : "string assigment", fncall, fc->lc);
         }
         else if (code >= ERR_INVAL_MACRO_NAME && code <= ERR_INVALID_LABEL
-        || code >= ERR_INVALID_OPCODE && code <= ERR_INVALID_OPERAND) {
+        || code >= ERR_INVALID_OPCODE) {
             fncall = va_arg(args, char*);
             fprintf(stderr, msg[code], fc->file_name, fncall ,fc->lc);
         }
-        else if (code <= ERR_MISSING_ENDMACRO)
+        else
             fprintf(stderr, msg[code], fc->file_name, fc->lc);
     }
     va_end(args);
