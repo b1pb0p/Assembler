@@ -28,6 +28,12 @@ extern const char *directives[DIRECTIVE_LEN];
 extern const char *commands[COMMANDS_LEN];
 
 typedef enum {
+    ABSOLUTE,
+    EXTERNAL,
+    RELOCATABLE
+} ARE;
+
+typedef enum {
     LBL,
     NUM,
     STR,
@@ -43,11 +49,11 @@ typedef enum {
 } Directive;
 
 typedef enum {
-    DIRECT = 1,
-    INDIRECT = 3,
+    IMMEDIATE = 1,
+    DIRECT = 3,
     REGISTER = 5,
     INVALID = -1
-} Addressing_modes;
+} Adrs_mod;
 
 typedef enum {
     MOV,

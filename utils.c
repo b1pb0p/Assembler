@@ -165,7 +165,6 @@ size_t get_word(char **ptr, char *word, Delimiter delimiter) {
     return length;
 }
 
-
 /**
  * Pushes the pointer back to the beginning of the previous word, accounting for unknown spaces or tabs.
  * If the previous word contains spaces or tabs, it goes back to the first character of the word.
