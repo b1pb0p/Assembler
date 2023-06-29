@@ -14,11 +14,11 @@
 #include "utils.h"
 
 /* "Private" helper functions */
-status concat_default_12bit(data_image* data, char** binary_word);
-status concat_reg_dest(data_image* data, char** binary_word);
-status concat_reg_src(data_image* data, char** binary_word);
-status concat_reg_reg(data_image* data, char** binary_word);
-status concat_address(data_image* data, char** binary_word);
+status concat_default_12bit(data_image *data, char** binary_word);
+status concat_reg_dest(data_image *data, char** binary_word);
+status concat_reg_src(data_image *data, char** binary_word);
+status concat_reg_reg(data_image *data, char** binary_word);
+status concat_address(data_image *data, char** binary_word);
 
 /**
  * Converts a decimal number to a binary string representation.
@@ -96,7 +96,7 @@ char* decimal_to_binary12(int decimal) {
  * @return A dynamically allocated truncated string, or NULL if an error occurs or,
  * `length` is greater than the input string length.
  */
-char* truncate_string(const char* input, int length) {
+char* truncate_string(const char *input, int length) {
     unsigned int input_len, truncate_len;
     char* truncated = NULL;
 
@@ -136,7 +136,7 @@ char* truncate_string(const char* input, int length) {
  * @return A Base64 string representation of the input.
  *         Returns NULL if an error occurs.
  */
-char* convert_bin_to_base64(const char* binary) {
+char* convert_bin_to_base64(const char *binary) {
     int i = 0;
     int j = 0;
     unsigned char value = 0;
@@ -168,6 +168,24 @@ char* convert_bin_to_base64(const char* binary) {
     return base64;
 }
 
+void process_data_image_dec_values(data_image *data, Adrs_mod src_op, Command opcode,
+                                   Adrs_mod dest_op, ARE are, status *report) {
+    int has_alloc_err;
+
+    data->binary_src = decimal_to_binary12(src_op);
+    data->binary_opcode = decimal_to_binary12(opcode);
+    data->binary_dest = decimal_to_binary12(dest_op);
+    data->binary_a_r_e = decimal_to_binary12(are);
+
+    has_alloc_err = !data->binary_src || !data->binary_opcode || !data->binary_dest || !data->binary_a_r_e;
+
+    if (has_alloc_err || create_base64_word(data) != NO_ERROR) {
+        handle_error(ERR_MEM_ALLOC);
+        *report = ERR_MEM_ALLOC;
+        return;
+    }
+}
+
 /**
  * Creates the base64 word for a data_image structure by concatenating the binary components
  * and converting the binary word to base64 format.
@@ -175,19 +193,19 @@ char* convert_bin_to_base64(const char* binary) {
  * @param data The data_image structure containing the binary components.
  * @return The status of the base64 word creation. Returns NO_ERROR if successful, or FAILURE if an error occurs.
  */
-status create_base64_word(data_image* data) {
+status create_base64_word(data_image *data) {
     status report = NO_ERROR;
     char* binary_word = malloc((BINARY_BITS + 1) * sizeof(char));
 
     if (!binary_word) {
         handle_error(ERR_MEM_ALLOC);
-        return FAILURE;
+        return ERR_MEM_ALLOC;
     }
 
     if (!data) {
         handle_error(TERMINATE, "create_base64_word()");
         free(binary_word);
-        return FAILURE;
+        return ERR_MEM_ALLOC;
     }
 
     //if (!data->is_word_complete)
@@ -257,7 +275,7 @@ data_image* create_data_image(int lc, int *address) {
  * @param binary_word A pointer to a char array where the concatenated binary word will be stored.
  * @return The status of the concatenation operation. Returns NO_ERROR if successful, or FAILURE if an error occurs.
  */
-status concat_default_12bit(data_image* data, char** binary_word) {
+status concat_default_12bit(data_image *data, char **binary_word) {
     char *src_op = NULL, *opcode = NULL, *dest_op = NULL, *a_r_e = NULL;
     status report = NO_ERROR;
 
@@ -289,7 +307,7 @@ status concat_default_12bit(data_image* data, char** binary_word) {
  * @param binary_word A pointer to a char pointer where the concatenated binary word will be stored.
  * @return The status of the concatenation operation. Returns NO_ERROR if successful, or FAILURE if an error occurs.
  */
-status concat_reg_dest(data_image* data, char** binary_word) {
+status concat_reg_dest(data_image *data, char** binary_word) {
     char *dest_op = NULL;
     status report = NO_ERROR;
 
@@ -316,7 +334,7 @@ status concat_reg_dest(data_image* data, char** binary_word) {
  * @param binary_word A pointer to a char pointer where the concatenated binary word will be stored.
  * @return The status of the concatenation operation. Returns NO_ERROR if successful, or FAILURE if an error occurs.
  */
-status concat_reg_src(data_image* data, char** binary_word) {
+status concat_reg_src(data_image *data, char** binary_word) {
     char *src_op = NULL;
     status report = NO_ERROR;
 
@@ -344,7 +362,7 @@ status concat_reg_src(data_image* data, char** binary_word) {
  *                    The function will allocate memory for the binary word and update the pointer accordingly.
  * @return The status of the concatenation operation. Returns NO_ERROR if successful, or FAILURE if an error occurs.
  */
-status concat_reg_reg(data_image* data, char** binary_word) {
+status concat_reg_reg(data_image *data, char** binary_word) {
     char *src_op = NULL, *dest_op = NULL;
     status report = NO_ERROR;
 
@@ -374,7 +392,7 @@ status concat_reg_reg(data_image* data, char** binary_word) {
  *                    The function will allocate memory for the binary word and update the pointer accordingly.
  * @return The status of the concatenation operation. Returns NO_ERROR if successful, or FAILURE if an error occurs.
  */
-status concat_address(data_image* data, char** binary_word) {
+status concat_address(data_image *data, char** binary_word) {
     char *src_op = NULL, *a_r_e = NULL;
     status report = NO_ERROR;
 
@@ -398,15 +416,16 @@ status concat_address(data_image* data, char** binary_word) {
 /**
  * Determines the addressing mode based on the input source string.
  *
+ * @param src The source file context.
  * @param word The input source string to analyze.
+ * @param word_len The length of the input source string.
+ * @param report A pointer to the status report.
  * @return The addressing mode determined based on the source string.
- *         Possible return values are:
- *         - REGISTER: If the source string starts with '@'.
- *         - DIRECT: If the source string starts with a digit.
- *         - INDIRECT: If the source string starts with an alphabetic character.
- *         - INVALID: If the source string does not match any addressing mode.
+ *         Possible return values are: REGISTER, IMMEDIATE, DIRECT and INVALID.
  */
-Addressing_modes get_addressing_mode(file_context *src, const char *word) {
+Adrs_mod get_addressing_mode(file_context *src, char *word, size_t word_len, status *report) {
+    Value word_type;
+
     if (*word == REGISTER_CH) {
         if (is_valid_register(word))
             return REGISTER;
@@ -414,60 +433,45 @@ Addressing_modes get_addressing_mode(file_context *src, const char *word) {
         return INVALID;
     }
 
-    if (*word == '+' || *word == '-')
-        word++;
-
-    if (isdigit(*word))
+    word_type = validate_data(src, word, word_len, report);
+    if (word_type == LBL)
         return DIRECT;
-
-    if (isalpha(*word))
-        return INDIRECT;
-
+    else if (word_type == NUM)
+        return IMMEDIATE;
     handle_error(TERMINATE, "get_addressing_mode()");
     return INVALID;
 }
 
 /**
- * Checks if the combination of Command and addressing modes is legal.
+ * Checks the legality of the addressing modes for a given command and operands.
  *
- * @param cmd  The Command to check.
- * @param src  The addressing mode of the source operand.
- * @param dest The addressing mode of the destination operand.
- * @return The status of the operation (NO_ERROR or FAILURE).
+ * @param src The source file context.
+ * @param cmd The command being checked.
+ * @param src_op The addressing mode of the source operand.
+ * @param dest_op The addressing mode of the destination operand.
+ * @param report A pointer to the status report.
+ * @return 1 if the addressing modes are legal for the command, 0 otherwise.
  */
-status is_legal_addressing(Command cmd, Addressing_modes src, Addressing_modes dest) {
-    status error_flag = NO_ERROR;
-
-    if (cmd <= SUB || cmd == LEA) {
-        if (src == INVALID) {
-            printf("error invalid addressing mode of src");
-            error_flag = FAILURE;
-        }
-
-        if ((cmd == MOV && dest == INVALID) || (!(dest == INDIRECT || dest == REGISTER))) {
-            printf("error invalid addressing mode of dest");
-            error_flag = FAILURE;
-        }
+int is_legal_addressing(file_context *src, Command cmd, Adrs_mod src_op, Adrs_mod dest_op, status *report) {
+    if (cmd > STOP) {
+        *report = ERR_INVALID_OPCODE;
+        return 0;
+    } else if ((cmd <= JSR && dest_op == INVALID) || (cmd <= SUB && src_op == INVALID)) {
+        handle_error(ERR_MISS_OPERAND, src);
+        *report = ERR_MISS_OPERAND;
+        return 0;
+    } else if (((cmd >= INC || cmd >= NOT && cmd <= CLR) && src_op != INVALID)
+                                        || (cmd >= RTS && dest_op != INVALID)) {
+        handle_error(ERR_TOO_MANY_OPERANDS, src);
+        *report = ERR_TOO_MANY_OPERANDS;
+        return 0;
+    } else if ((cmd <= JSR && (cmd != PRN && cmd != CMP))
+        && ((dest_op == IMMEDIATE) || (cmd == LEA && src_op != DIRECT))) {
+        handle_error(ERR_INVALID_OPERAND, src);
+        *report = ERR_INVALID_OPERAND;
+        return 0;
     }
-    else if (cmd >= RTS) {
-        if (src != INVALID || dest != INVALID) {
-            printf("error this Command doesn't take any parameters");
-            error_flag = FAILURE;
-        }
-    }
-    else if (cmd == PRN) {
-        if (src != INVALID) {
-            printf("error invalid addressing mode of src");
-            error_flag = FAILURE;
-        }
-
-        if (dest == INVALID) {
-            printf("error invalid addressing mode of dest");
-            error_flag = FAILURE;
-        }
-    }
-
-    return error_flag;
+    return 1;
 }
 
 /**
@@ -476,7 +480,7 @@ status is_legal_addressing(Command cmd, Addressing_modes src, Addressing_modes d
  * @param symbol_t Pointer to a pointer to the Symbol structure to be freed.
  *                 The pointer will be set to NULL after freeing the memory.
  */
-void free_symbol(symbol** symbol_t) {
+void free_symbol(symbol **symbol_t) {
     if (!symbol_t || !(*symbol_t)) return;
 
     if ((*symbol_t)->label)

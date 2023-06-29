@@ -52,21 +52,24 @@ struct symbol {
     data_image *data;
 };
 
+char* decimal_to_binary12(int decimal);
 char* convert_bin_to_base64(const char* binary);
 char* truncate_string(const char* input, int length);
-char* decimal_to_binary12(int decimal);
 
 void free_symbol(symbol** symbol_t);
-void free_symbol_table(symbol ***p_symbol_table, size_t *size);
 void free_data_image(data_image** data);
-void free_data_image_array(data_image ***data_array, size_t *size);
 void free_strings(int num_strings, ...);
+void free_symbol_table(symbol ***p_symbol_table, size_t *size);
+void free_data_image_array(data_image ***data_array, size_t *size);
+void process_data_image_dec_values(data_image *data, Adrs_mod src_op, Command opcode,
+                                             Adrs_mod dest_op, ARE are, status *report);
+
+int is_legal_addressing(file_context *src, Command cmd, Adrs_mod src_op, Adrs_mod dest_op, status *report);
 
 status create_base64_word(data_image* data);
-status is_legal_addressing(Command cmd, Addressing_modes src, Addressing_modes dest);
 
 data_image* create_data_image(int lc, int *address);
 
-Addressing_modes get_addressing_mode(file_context *src, const char *word);
+Adrs_mod get_addressing_mode(file_context *src, char *word, size_t word_len, status *report);
 
 #endif
