@@ -46,11 +46,12 @@ Value line_parser(file_context *src, Directive dir, char **line, char *word, sta
 
 data_image* add_data_image(file_context *src, const char* label, status *report);
 
-        void cleanup(file_context **src);
+void cleanup(file_context **src);
 void free_global_data_and_symbol();
 void process_data(file_context *src, const char *label, char *line, status *report);
 void process_string(file_context *src, const char *label, char *line, status *report);
 void handle_processing_line(file_context *src, char *line, symbol *sym, status *report);
+void handle_one_operand(file_context *src, Command cmd, const char *label, char *line, status *report);
 void handle_no_operands(file_context *src, Command cmd, const char *label, char *line, status *report);
 void process_directive(file_context *src, Directive dir, const char *label, char *line, status *report);
 void assert_data_img_by_label(file_context *src, const char *label, int *flag, int **value, data_image **p_data,

@@ -289,17 +289,6 @@ void process_directive(file_context *src, Directive dir, const char *label, char
 void process_command(file_context *src,  Command cmd, const char *label, char *line, status *report) {
     status temp_report = NO_ERROR;
 
-
-
-
-//    else {/* A label can only be associated with the initial value */
-//        if (!(*p_data = add_data_image(src, NULL, report)) && *report == ERR_MEM_ALLOC)
-//            return;
-//    }
-
-    if (!(p_data = add_data_image(src, label, report)) && *report == ERR_MEM_ALLOC)
-        return;
-
     if (cmd == RTS || cmd == STOP)
         handle_no_operands(src, cmd, label, line, &temp_report);
     else if (cmd >= INC && cmd <= JSR || cmd >= NOT && cmd <= CLR) {
@@ -308,30 +297,89 @@ void process_command(file_context *src,  Command cmd, const char *label, char *l
 
 }
 
+/**
+ * Handles command processing for commands that take no operands (e.g., rts, stop).
+ *
+ * @param src The source file context.
+ * @param cmd The command being processed.
+ * @param label The label associated with the data (optional - NULL).
+ * @param line The line containing the command.
+ * @param report A pointer to the status report.
+ */
 void handle_no_operands(file_context *src, Command cmd, const char *label, char *line, status *report) {
-    data_image *p_data = NULL;
-    /*TODO HANDLE LABEL */
+    symbol *sym = NULL;
+    data_image *p_data = add_data_image(src, label, report);
 
-    if (!(p_data = add_data_image(src, label, report)) && *report == ERR_MEM_ALLOC)
+    if (!p_data)
         return;
-    else if (get_word_length(&line)) {
+
+    sym = find_symbol(label);
+
+    if (get_word_length(&line)) {
         *report = ERR_EXTRA_TEXT;
         handle_error(ERR_EXTRA_TEXT, src);
+    }
+
+    p_data->base64_word = convert_bin_to_base64(decimal_to_binary12(cmd));
+    if (!p_data->base64_word) {
+        *report = ERR_MEM_ALLOC; /* error message is printed via the error causing function at condition above */
+        free_data_image(&p_data);
+        if (sym) free_symbol(&sym);
         return;
     }
-    else if (!(p_data->base64_word = convert_bin_to_base64(decimal_to_binary12(cmd)))) {
-        *report = ERR_MEM_ALLOC;
-        return;
-    }
+
+    if (sym) sym->data = p_data;
     p_data->is_word_complete = 1;
+    IC++;
 }
 
+/**
+ * Handles command processing for commands that take one operand (source operand).
+ * This function is responsible for processing commands such as not, clr, inc, dec, jmp, bne, red, prn, and jsr.
+ *
+ * @param src The source file context.
+ * @param cmd The command being processed.
+ * @param label The label associated with the data (optional - NULL).
+ * @param line The line containing the command.
+ * @param report A pointer to the status report.
+ */
 void handle_one_operand(file_context *src, Command cmd, const char *label, char *line, status *report) {
-    if (!(p_data->binary_opcode = decimal_to_binary12(cmd)) ||
-        !(p_data->binary_src = decimal_to_binary12(ZERO))   ||
-        !(p_data->binary_src = decimal_to_binary12(ZERO)))
-        *report = FAILURE;
+    char *word = NULL;
+    data_image *p_data_word = NULL;
+    data_image *p_data_op = NULL;
+    Adrs_mod op_mode = INVALID;
+    size_t word_len = get_word(&line, word, SPACE);
+
+    if (!word_len || !word) {
+        *report = *report == ERR_MEM_ALLOC ? ERR_MEM_ALLOC : ERR_MISS_OPERAND;
+        handle_error(ERR_MISS_OPERAND, src);
+        return;
+    } else if (get_word_length(&line)) {
+        *report = ERR_EXTRA_TEXT;
+        handle_error(ERR_EXTRA_TEXT, src);
+    }
+
+    op_mode = get_addressing_mode(src, word, word_len, report);
+    if (!is_legal_addressing(src, cmd, INVALID, op_mode,report)) {
+        free(word);
+        return;
+    }
+
+    p_data_word = add_data_image(src, label, report);
+    p_data_op = add_data_image(src, NULL, report); /* a label is only associated with first data image */
+
+    if (!p_data_word || !p_data_op) {
+        if (p_data_word) free_data_image(&p_data_word);
+        if (p_data_op) free_data_image(&p_data_op);
+        free(word);
+        return;
+    }
+
+
+
+
 }
+
 
 Value line_parser(file_context *src, Directive dir, char **line, char *word, status *report) {
     size_t length;
@@ -780,7 +828,7 @@ status assert_value_to_data(file_context *src, Directive dir, Value val_type ,
 int is_valid_register(const char* str) {
     if (str[0] == '@' && str[1] == 'r' &&
         str[2] >= '0' && str[2] <= '7' &&
-        (str[3] == '\0' || isspace(str[3]) || str[3] == ','))
+        (str[3] == '\0' || isspace(str[3])))
         return 1;
     else
         return 0;
