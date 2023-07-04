@@ -13,6 +13,8 @@
 #include "errors.h"
 #include "utils.h"
 
+#define get_register_num(reg) ((char) (reg)[2] - '0')
+
 /* "Private" helper functions */
 status concat_default_12bit(data_image *data, char** binary_word);
 status concat_reg_dest(data_image *data, char** binary_word);
@@ -136,7 +138,7 @@ char* truncate_string(const char *input, int length) {
  * @return A Base64 string representation of the input.
  *         Returns NULL if an error occurs.
  */
-char* convert_bin_to_base64(const char *binary) {
+char* binary12_to_base64(const char *binary) {
     int i = 0;
     int j = 0;
     unsigned char value = 0;
@@ -150,7 +152,7 @@ char* convert_bin_to_base64(const char *binary) {
         return NULL;
 
     if (binary[BINARY_BITS] != '\0') {
-        handle_error(TERMINATE, "convert_bin_to_base64()");
+        handle_error(TERMINATE, "binary12_to_base64()");
         return NULL;
     }
     while (binary[i] != '\0') {
@@ -168,8 +170,20 @@ char* convert_bin_to_base64(const char *binary) {
     return base64;
 }
 
-void process_data_image_dec_values(data_image *data, Adrs_mod src_op, Command opcode,
-                                   Adrs_mod dest_op, ARE are, status *report) {
+/**
+ * Processes the decimal values for a data image, setting the binary representations
+ * of the source operand, opcode, destination operand, and A/R/E bits.
+ *
+ * @param data The data image structure to be processed.
+ * @param src_op The addressing mode of the source operand.
+ * @param opcode The opcode of the command.
+ * @param dest_op The addressing mode of the destination operand.
+ * @param are The A/R/E (Absolute/Relocation/External) bits.
+ * @return The status of the processing operation. Possible return values are:
+ *         - NO_ERROR: If the processing is successful.
+ *         - ERR_MEM_ALLOC: If there is a memory allocation error.
+ */
+status process_data_img_dec(data_image *data, Adrs_mod src_op, Command opcode, Adrs_mod dest_op, ARE are) {
     int has_alloc_err;
 
     data->binary_src = decimal_to_binary12(src_op);
@@ -181,10 +195,103 @@ void process_data_image_dec_values(data_image *data, Adrs_mod src_op, Command op
 
     if (has_alloc_err || create_base64_word(data) != NO_ERROR) {
         handle_error(ERR_MEM_ALLOC);
-        *report = ERR_MEM_ALLOC;
-        return;
+        return ERR_MEM_ALLOC;;
+    }
+    return NO_ERROR;
+}
+
+data_image *assemble_operand_data_img(file_context *src, Concat_mode con_md, Adrs_mod mode, char* word, ...) {
+    va_list args;
+    symbol *sym = NULL;
+    status temp_report;
+    data_image *data = add_data_image(src, NULL, &temp_report);
+
+    if (!data) {
+        handle_error(ERR_MEM_ALLOC);
+        return NULL;
+    } else if (mode == DIRECT) {
+        sym = add_symbol(src, word, INVALID_ADDRESS, &temp_report);
+        temp_report = handle_address_reference(data, sym);
+    } else if (mode == IMMEDIATE) {
+        data->base64_word = binary12_to_base64(decimal_to_binary12(safe_atoi(word)));
+        temp_report = data->base64_word && (data->is_word_complete = 1) ? NO_ERROR : FAILURE;
+    } else if (con_md == REG_SRC || con_md == REG_DEST) {
+        temp_report = handle_register_data_img(data, con_md, word);
+    } else if (con_md == REG_REG) {
+        va_start(args, word);
+        temp_report = handle_register_data_img(data, con_md, word, va_arg(args, char*));
+        va_end(args);
+    } else {
+        handle_error(TERMINATE, "assemble_operand_data_img()");
+        temp_report = TERMINATE;
+    }
+    return temp_report == NO_ERROR ? data : NULL;
+}
+
+status handle_register_data_img(data_image *data, Concat_mode con_act, char *reg, ...) {
+    va_list args;
+    char *sec_reg = NULL;
+
+    if (!data || !reg || (con_act != REG_SRC && con_act != REG_DEST && con_act != REG_REG)) {
+        handle_error(TERMINATE, "handle_address_reference()");
+        return TERMINATE;
+    }
+    else if (con_act == REG_SRC)
+        data->binary_src = decimal_to_binary12(get_register_num(reg));
+    else if (con_act == REG_DEST)
+        data->binary_dest = decimal_to_binary12(get_register_num(reg));
+    else {/* (con_act == REG_REG) */
+        va_start(args, reg);
+        sec_reg = va_arg(args, char*);
+        data->binary_src = decimal_to_binary12(get_register_num(reg));
+        data->binary_dest = decimal_to_binary12(get_register_num(sec_reg));
+        va_end(args);
+    }
+    return create_base64_word(data) && (data->is_word_complete = 1) ? NO_ERROR : FAILURE;
+}
+
+status handle_address_reference(data_image *data,  symbol *sym) {
+    if (!data || !sym) {
+        handle_error(TERMINATE, "handle_address_reference()");
+        return TERMINATE;
+    }
+    else if (sym->address_binary && (data->binary_src = sym->address_binary) &&
+             (data->binary_a_r_e = decimal_to_binary12(get_are(sym)))) {
+        data->concat = ADDRESS;
+        data->is_word_complete = 1;
+        return create_base64_word(data);
+    }
+    data->p_sym = sym;
+    return NO_ERROR;
+}
+
+status get_concat_mode(Adrs_mod src_op, Adrs_mod dest_op, Concat_mode *cn1, Concat_mode *cn2) {
+    if (src_op && dest_op) {
+        if (src_op == REGISTER && dest_op == REGISTER)
+            *cn1 = *cn2 = REG_REG;
+        else {
+            *cn1 = get_concat_mode_one_op(src_op, INVALID_MD);
+            *cn2 = get_concat_mode_one_op(INVALID_MD, dest_op);
+        }
+    }
+    return (*cn1 == -1 || *cn2 == -1) ? FAILURE : NO_ERROR;
+}
+
+Concat_mode get_concat_mode_one_op(Adrs_mod src_op, Adrs_mod dest_op) {
+    if ((src_op == IMMEDIATE && dest_op == INVALID_MD) || (src_op == INVALID_MD && dest_op == IMMEDIATE))
+        return VALUE;
+    else if ((src_op == DIRECT && dest_op == INVALID_MD) || (src_op == INVALID_MD && dest_op == DIRECT))
+        return ADDRESS;
+    else if (src_op == REGISTER && dest_op == INVALID_MD)
+        return REG_SRC;
+    else if (src_op == INVALID_MD && dest_op == REGISTER)
+        return REG_DEST;
+    else {
+        handle_error(TERMINATE, "get_concat_mode_one_op()");
+        return -1;
     }
 }
+
 
 /**
  * Creates the base64 word for a data_image structure by concatenating the binary components
@@ -224,13 +331,13 @@ status create_base64_word(data_image *data) {
     else if (data->concat == VALUE)
         report = (binary_word = decimal_to_binary12(*(data->value))) ? NO_ERROR : FAILURE;
     else
-        handle_error(TERMINATE, "concatenate_and_convert_to_base64() (Invalid concat action)");
+        handle_error(TERMINATE, "concatenate_and_convert_to_base64()");
 
     if (report != FAILURE) {
         /* Convert binary to base64 */
-        data->base64_word = convert_bin_to_base64(binary_word);
+        data->base64_word = binary12_to_base64(binary_word);
         if (!data->base64_word)
-            report = FAILURE; /* Error message printed via convert_bin_to_base64() */
+            report = FAILURE; /* Error message printed via binary12_to_base64() */
     }
 
     free(binary_word);
@@ -266,6 +373,10 @@ data_image* create_data_image(int lc, int *address) {
     p_ret->data_address = (*address)++;
 
     return p_ret;
+}
+
+ARE get_are(symbol *sym) {
+    return sym->sym_dir == EXTERN ? EXTERNAL : RELOCATABLE;
 }
 
 /**
@@ -418,28 +529,29 @@ status concat_address(data_image *data, char** binary_word) {
  *
  * @param src The source file context.
  * @param word The input source string to analyze.
+ * @param val_type A pointer to the Value variable to store the type of the input source string.
  * @param word_len The length of the input source string.
  * @param report A pointer to the status report.
  * @return The addressing mode determined based on the source string.
- *         Possible return values are: REGISTER, IMMEDIATE, DIRECT and INVALID.
+ *         Possible return values are: REGISTER, IMMEDIATE, DIRECT and INVALID_MD.
  */
 Adrs_mod get_addressing_mode(file_context *src, char *word, size_t word_len, status *report) {
-    Value word_type;
-
+    Value val_type;
     if (*word == REGISTER_CH) {
+        val_type = NUM;
         if (is_valid_register(word))
             return REGISTER;
         handle_error(ERR_INVALID_REGISTER, src);
-        return INVALID;
+        return INVALID_MD;
     }
 
-    word_type = validate_data(src, word, word_len, report);
-    if (word_type == LBL)
+    val_type = validate_data(src, word, word_len, report);
+    if (val_type == LBL)
         return DIRECT;
-    else if (word_type == NUM)
+    else if (val_type == NUM)
         return IMMEDIATE;
     handle_error(TERMINATE, "get_addressing_mode()");
-    return INVALID;
+    return INVALID_MD;
 }
 
 /**
@@ -456,12 +568,12 @@ int is_legal_addressing(file_context *src, Command cmd, Adrs_mod src_op, Adrs_mo
     if (cmd > STOP) {
         *report = ERR_INVALID_OPCODE;
         return 0;
-    } else if ((cmd <= JSR && dest_op == INVALID) || (cmd <= SUB && src_op == INVALID)) {
+    } else if ((cmd <= JSR && dest_op == INVALID_MD) || (cmd <= SUB && src_op == INVALID_MD)) {
         handle_error(ERR_MISS_OPERAND, src);
         *report = ERR_MISS_OPERAND;
         return 0;
-    } else if (((cmd >= INC || cmd >= NOT && cmd <= CLR) && src_op != INVALID)
-                                        || (cmd >= RTS && dest_op != INVALID)) {
+    } else if (((cmd >= INC || cmd >= NOT && cmd <= CLR) && src_op != INVALID_MD)
+                                        || (cmd >= RTS && dest_op != INVALID_MD)) {
         handle_error(ERR_TOO_MANY_OPERANDS, src);
         *report = ERR_TOO_MANY_OPERANDS;
         return 0;
@@ -473,6 +585,7 @@ int is_legal_addressing(file_context *src, Command cmd, Adrs_mod src_op, Adrs_mo
     }
     return 1;
 }
+
 
 /**
  * Frees the memory allocated for a Symbol structure, including its members.

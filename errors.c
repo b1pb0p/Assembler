@@ -11,8 +11,8 @@
 
 /* Status messages */
 const char *msg[MSG_LEN] = {
-        "Assembly completed without errors. Output file(s) generated.",
-        "Assembly terminated with errors. No output file(s) generated.",
+        "Assembly completed without errors. Output file(s) have been generated.",
+        "Assembly terminated with errors. No output file(s) have been generated.",
         "Invalid function call - %s.",
         "Assembler - Memory allocation error.",
         "Assembler - Unable to open file - %s",
@@ -33,8 +33,9 @@ const char *msg[MSG_LEN] = {
         "%s - Missing '@' symbol on line %d.",
         "%s - Missing ':' symbol after label declaration on line %d.",
         "%s - Missing ',' symbol on line %d.",
-        "%s - Line too long on line %d. Cannot exceed 80 characters.",
-        "%s - Macro too long on line %d. Cannot exceed 31 characters.",
+        "%s - Line length exceeds the maximum limit on line %d. Maximum length is 80 characters.",
+        "%s - Macro length exceeds the maximum limit on line %d. Maximum length is 31 characters.",
+        "%s - Operand length exceeds the maximum limit on line %d. Maximum length is 31 characters.",
         "%s - Invalid macro name (%s) on line %d.",
         "%s - Label (%s) cannot start with a digit on line %d",
         "%s - Invalid %s (%s) contains illegal characters on line %d",
@@ -42,16 +43,16 @@ const char *msg[MSG_LEN] = {
         "%s - Label (%s) does not exist on line %d.",
         "%s - Invalid Command or Directive after %s, (%s) on line %d.",
         "%s - Label (%s) cannot act as both entry and extern on line %d",
-        "%s - Label (%s) is been declared / used in forbidden context on line %d",
+        "%s - Label (%s) is being declared/used in a forbidden context on line %d",
         "%s - Invalid label name (%s) on line %d.",
         "%s - Duplicate macro name on line %d.",
         "%s - Missing opening 'mcro' on line %d.",
         "%s - Missing closing 'endmcro' on line %d.",
-        "Preprocessor (%d/%d) - No output file(s) generated - %s.as.",
-        "Preprocessor (%d/%d) - Output file(s) successfully generated - %s.",
-        "First Pass (%d/%d) - Output file(s) successfully generated - %s.as.",
-        "First Pass (%d/%d) - No output file(s) generated - %s.as.",
-        "Assembler process for - %s.as terminated with errors. No output file(s) generated.",
+        "Preprocessor (%d/%d) - No output file(s) have been generated - %s.as.",
+        "Preprocessor (%d/%d) - Output file(s) have been successfully generated - %s.",
+        "First Pass (%d/%d) - Output file(s) have been successfully generated - %s.as.",
+        "First Pass (%d/%d) - No output file(s) have been generated - %s.as.",
+        "Assembler process for %s.as terminated with errors. No output file(s) have been generated.",
 };
 
 /**

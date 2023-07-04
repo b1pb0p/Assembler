@@ -45,14 +45,14 @@ typedef enum {
     STRING,
     ENTRY,
     EXTERN,
-    DEFAULT /* Added field to indicate it belongs to the current file */
+    DEFAULT /* for .obj */
 } Directive;
 
 typedef enum {
+    INVALID_MD = 0,
     IMMEDIATE = 1,
     DIRECT = 3,
-    REGISTER = 5,
-    INVALID = -1
+    REGISTER = 5
 } Adrs_mod;
 
 typedef enum {
@@ -89,10 +89,19 @@ typedef struct {
 } file_context;
 
 
-
 char *strdup(const char *s);
 
+int safe_atoi(const char *str);
+int is_valid_register(const char* str);
+int is_valid_string(char **line, char **word, status *report);
+int is_label(file_context *src, const char *label, status *report);
+
+void free_file_context(file_context** context);
+void unget_word(char **ptr, size_t word_length, char *line);
+void free_file_context_array(file_context** contexts, int size);
+
 size_t get_word_length(char **ptr);
+size_t get_length_until_comma_or_space(char *ptr);
 size_t get_word(char **ptr, char *word, Delimiter delimiter);
 
 status skip_white_spaces(char *line);
@@ -101,10 +110,6 @@ status copy_n_string(char** target, const char* source, size_t count);
 
 Command is_command(const char* src);
 Directive is_directive(const char* src);
-
-void free_file_context(file_context** context);
-void unget_word(char **ptr, size_t word_length, char *line);
-void free_file_context_array(file_context** contexts, int size);
 
 file_context* create_file_context(const char* file_name, char* ext, size_t ext_len, char* mode, status *report);
 #endif

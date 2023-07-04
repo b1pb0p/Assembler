@@ -72,11 +72,11 @@ status assembler_second_pass(file_context **src) {
     if (!p_src)
         return FAILURE;
 
-    report = generate_obj_output(p_src->file_name_wout_ext, IC, DC);
+    report = generate_output_by_dest(p_src,  EXTERN); /* .ext output */
     UPDATE_REPORT_STATUS(report, &src);
-    //    report = generate_directive_output(p_src->file_name_wout_ext, ENTRY_EXT, ENTRY);
+    report = generate_output_by_dest(p_src,  ENTRY); /* .ent output */
     UPDATE_REPORT_STATUS(report, &src);
-    //   report = generate_directive_output(p_src->file_name_wout_ext, EXTERNAL_EXT, EXTERN);
+    report = generate_output_by_dest(p_src, DEFAULT); /* .obj output */
     UPDATE_REPORT_STATUS(report, &src);
 
     free_global_data_and_symbol();
@@ -180,9 +180,10 @@ void process_data(file_context *src, const char *label, char *line, status *repo
         else if (temp_report == FAILURE)
             continue;
 
-        DC++;
+
         p_data->value = value;
         p_data->concat = VALUE;
+        DC++;
     }
 
     if (!is_first_value) /* Missing action after .data */
@@ -283,6 +284,7 @@ void process_directive(file_context *src, Directive dir, const char *label, char
 
         sym->sym_dir = dir;
         if (sym->data) sym->data->directive = dir;
+
     }
 }
 
@@ -293,7 +295,14 @@ void process_command(file_context *src,  Command cmd, const char *label, char *l
         handle_no_operands(src, cmd, label, line, &temp_report);
     else if (cmd >= INC && cmd <= JSR || cmd >= NOT && cmd <= CLR) {
         handle_one_operand(src, cmd, label, line, &temp_report);
+    } else if (cmd <= SUB || cmd == LEA)
+        handle_two_operands(src, cmd, label, line, &temp_report);
+    else {
+        *report = TERMINATE;
+        handle_error(TERMINATE, "process_command()");
     }
+
+    *report = *report == ERR_MEM_ALLOC || temp_report == NO_ERROR ? *report : temp_report;
 
 }
 
@@ -307,6 +316,7 @@ void process_command(file_context *src,  Command cmd, const char *label, char *l
  * @param report A pointer to the status report.
  */
 void handle_no_operands(file_context *src, Command cmd, const char *label, char *line, status *report) {
+    status temp_report;
     symbol *sym = NULL;
     data_image *p_data = add_data_image(src, label, report);
 
@@ -320,9 +330,9 @@ void handle_no_operands(file_context *src, Command cmd, const char *label, char 
         handle_error(ERR_EXTRA_TEXT, src);
     }
 
-    p_data->base64_word = convert_bin_to_base64(decimal_to_binary12(cmd));
-    if (!p_data->base64_word) {
-        *report = ERR_MEM_ALLOC; /* error message is printed via the error causing function at condition above */
+    temp_report = process_data_img_dec(p_data, INVALID_MD, cmd, INVALID_MD, ABSOLUTE);
+    if (temp_report != NO_ERROR) {
+        *report = temp_report;
         free_data_image(&p_data);
         if (sym) free_symbol(&sym);
         return;
@@ -347,8 +357,13 @@ void handle_one_operand(file_context *src, Command cmd, const char *label, char 
     char *word = NULL;
     data_image *p_data_word = NULL;
     data_image *p_data_op = NULL;
-    Adrs_mod op_mode = INVALID;
-    size_t word_len = get_word(&line, word, SPACE);
+    Adrs_mod op_mode;
+    status temp_report;
+    size_t word_len;
+    Concat_mode concat;
+
+    word = malloc(sizeof(char) * get_word_length(&line));
+    word_len = get_word(&line, word, COMMA);
 
     if (!word_len || !word) {
         *report = *report == ERR_MEM_ALLOC ? ERR_MEM_ALLOC : ERR_MISS_OPERAND;
@@ -357,27 +372,105 @@ void handle_one_operand(file_context *src, Command cmd, const char *label, char 
     } else if (get_word_length(&line)) {
         *report = ERR_EXTRA_TEXT;
         handle_error(ERR_EXTRA_TEXT, src);
+    } else if (word_len > MAX_LABEL_LENGTH) {
+        *report = ERR_OPERAND_TOO_LONG;
+        handle_error(ERR_OPERAND_TOO_LONG);
     }
 
     op_mode = get_addressing_mode(src, word, word_len, report);
-    if (!is_legal_addressing(src, cmd, INVALID, op_mode,report)) {
+    if (!is_legal_addressing(src, cmd, INVALID_MD, op_mode, report) ||
+            (concat = get_concat_mode_one_op(INVALID_MD, op_mode)) == -1) {
         free(word);
         return;
     }
 
     p_data_word = add_data_image(src, label, report);
-    p_data_op = add_data_image(src, NULL, report); /* a label is only associated with first data image */
+    p_data_op = assemble_operand_data_img(src, concat, op_mode, word);
+    temp_report = process_data_img_dec(p_data_word, INVALID_MD, cmd, op_mode, ABSOLUTE);
 
-    if (!p_data_word || !p_data_op) {
+    if (!p_data_word || !p_data_op || temp_report != NO_ERROR ) {
         if (p_data_word) free_data_image(&p_data_word);
         if (p_data_op) free_data_image(&p_data_op);
         free(word);
+        *report = ERR_MEM_ALLOC;
+        return;
+    }
+    p_data_word->is_word_complete = 1;
+}
+
+/**
+ * Handles the processing of commands with two operands.
+ *
+ * This function processes a command with two operands, assembling the data image
+ * and performing necessary error handling.
+ *
+ * @param src The file context.
+ * @param cmd The command.
+ * @param label The label associated with the command.
+ * @param line The input line.
+ * @param report Pointer to the status report.
+ */
+void handle_two_operands(file_context *src, Command cmd, const char *label, char *line, status *report) {
+    char *word = NULL;
+    char *next_word = NULL;
+    data_image *p_data_word = NULL;
+    data_image *p_data_op = NULL;
+    data_image *p_data_sec_op = NULL;
+    Adrs_mod op_mode, sec_op_mode;
+    status temp_report;
+    Concat_mode concat_1 = -1, concat_2 = -1;
+    size_t word_len, word_len_sec;
+
+    /* TODO: USE LINE PARSER TO IF VALID */
+    word_len =  get_word(&line, (word = malloc(get_length_until_comma_or_space(line))), COMMA);
+    if (*line == ',') line++;
+    word_len_sec = get_word(&line, (next_word =  malloc(get_length_until_comma_or_space(line))), COMMA);
+
+    if (!word_len || !word_len_sec || !word) {
+        *report = *report == ERR_MEM_ALLOC ? ERR_MEM_ALLOC : ERR_MISS_OPERAND;
+        handle_error(ERR_MISS_OPERAND, src);
+        if (word) free(word);
+        if (next_word) free(word);
+        return;
+    } else if (get_word_length(&line)) {
+        *report = ERR_EXTRA_TEXT;
+        handle_error(ERR_EXTRA_TEXT, src);
+    } else if (word_len > MAX_LABEL_LENGTH) {
+        *report = ERR_OPERAND_TOO_LONG;
+        handle_error(ERR_OPERAND_TOO_LONG);
+    }
+
+    op_mode = get_addressing_mode(src, word, word_len, report);
+    sec_op_mode = get_addressing_mode(src, word, word_len_sec, report);
+
+    if (!is_legal_addressing(src, cmd, sec_op_mode, op_mode, report) ||
+            get_concat_mode(op_mode, sec_op_mode, &concat_1, &concat_2) != NO_ERROR) {
+        free(word);
+        if (next_word) free(next_word);
         return;
     }
 
+    p_data_word = add_data_image(src, label, report);
 
+    if (concat_1 == concat_2 && concat_1 == REG_REG)
+        p_data_op = assemble_operand_data_img(src, concat_1, op_mode, word, next_word);
+    else {
+        p_data_op = assemble_operand_data_img(src, concat_1, op_mode, word);
+        p_data_sec_op = assemble_operand_data_img(src, concat_2, sec_op_mode, word);
+    }
+    temp_report = process_data_img_dec(p_data_word, op_mode, cmd, sec_op_mode, ABSOLUTE);
 
-
+    if (!p_data_word || (!p_data_op || (concat_1 != REG_REG && !p_data_sec_op)) || temp_report != NO_ERROR ) {
+        if (p_data_word) free_data_image(&p_data_word);
+        if (p_data_op) free_data_image(&p_data_op);
+        free(word);
+        *report = ERR_MEM_ALLOC;
+        return;
+    }
+    p_data_word->is_word_complete = 1;
+    if (op_mode == IMMEDIATE || op_mode == REGISTER) p_data_op-> is_word_complete = 1;
+    if (sec_op_mode == IMMEDIATE || sec_op_mode == REGISTER) p_data_sec_op-> is_word_complete = 1;
+    if (concat_1 == REG_REG) p_data_op->is_word_complete = 1;
 }
 
 
@@ -632,47 +725,6 @@ symbol* declare_label(file_context *src, char *label, size_t label_len, status *
     return sym;
 }
 
-/**
- * Checks if a string is a valid label.
- *
- * @param label The string to check.
- * @return NO_ERROR if the string is a valid label, an appropriate error status otherwise.
- *
- * @remarks The function checks if the label meets the following criteria:
- *   - The label is not NULL and has a length between 1 and MAX_LABEL_LENGTH characters.
- *   - The label does not match any reserved command or sym_dir.
- *   - The label does not start with a digit.
- *   - The label consists only of alphanumeric characters.
- *   - The label ends with a colon (':') to indicate a label declaration.
- */
-status is_valid_label(const char *label) {
-    size_t length = strlen(label);
-    int i;
-
-    if (!label || length == 0  || length > MAX_LABEL_LENGTH ||
-        is_command(label) == INV_CMD || is_directive(label + 1) ||
-        is_directive(label))
-        return ERR_INVALID_LABEL;
-
-    if (isdigit(*label))
-        return ERR_LABEL_START_DIGIT;
-
-    if (!isalpha(*label))
-        return ERR_ILLEGAL_CHARS;
-
-    for (i = 1; i < length - 1; i++)
-        if (!isalnum(label[i]))
-            return ERR_ILLEGAL_CHARS;
-
-    if (label[length - 1] != ':' && !isalnum(label[length - 1]))
-        return ERR_ILLEGAL_CHARS;
-
-    if (label[length - 1] == ':')
-        return NO_ERROR;
-
-    return ERR_MISSING_COLON;
-}
-
 int is_label(file_context *src, const char *label, status *report) {
     status ret_val = is_valid_label(label);
 
@@ -752,25 +804,6 @@ Value validate_string(file_context *src, char *word, size_t length, status *repo
     }
 }
 
-
-int is_valid_string(char **line, char **word, status *report) {
-    if (**line == '\0' || **line == '\n')
-        return 0;
-
-    while (**line && isspace(**line))
-        (*line)++;
-
-    *word = malloc(sizeof(char) * get_word_length(line) + 1);
-
-    if (!*word || !get_word(line, *word, COMMA)) {
-        *report = ERR_MEM_ALLOC;
-        handle_error(ERR_MEM_ALLOC);
-        return 0;
-    }
-
-    return 1;
-}
-
 void assert_data_img_by_label(file_context *src, const char *label, int *flag,
                               int **value, data_image **p_data, status *report) {
     if (label && !*flag) {
@@ -797,17 +830,18 @@ status assert_value_to_data(file_context *src, Directive dir, Value val_type ,
     status temp_report = is_valid_label(word);
 
     if (dir == DATA && val_type == NUM)
-        **value = atoi(word); // NOLINT(cert-err34-c)
+        **value = safe_atoi(word);
     else if (dir == STRING && val_type == STR)
         **value = (int)*word;
     else if (temp_report == ERR_MISSING_COLON && val_type == LBL) { /* A label (usage) within statement */
-        sym = add_symbol(src, word, INVALID, report);
+        sym = add_symbol(src, word, INVALID_ADDRESS, report);
         if (sym && sym->data && sym->data->value)
             *value = sym->data->value;
         else if (sym) {
             (*p_data)->p_sym = sym;
             free(*value);
             *value = NULL;
+            return NO_ERROR;
         }
         else {
             free_data_image(&data_img_obj[data_arr_obj_index--]);
@@ -825,15 +859,6 @@ status assert_value_to_data(file_context *src, Directive dir, Value val_type ,
     return NO_ERROR;
 }
 
-int is_valid_register(const char* str) {
-    if (str[0] == '@' && str[1] == 'r' &&
-        str[2] >= '0' && str[2] <= '7' &&
-        (str[3] == '\0' || isspace(str[3])))
-        return 1;
-    else
-        return 0;
-}
-
 /**
 * Generates the output file for the object code.
 *
@@ -844,61 +869,82 @@ int is_valid_register(const char* str) {
 * @param dc The data count (DC).
 * @return The status of the operation. Returns NO_ERROR on success, or FAILURE if an error occurred.
 */
-status generate_obj_output(const char *file_name, size_t ic, size_t dc) {
-    int i;
+status generate_output_by_dest(file_context *src, Directive dir) {
+    file_context *dest = NULL;
     status report = NO_ERROR;
-    file_context *obj_file = create_file_context(file_name, OBJECT_EXT, FILE_EXT_LEN, FILE_MODE_WRITE, &report);
 
-    if (!obj_file)
-        return FAILURE;
+    typedef status (*write_func)(file_context *src, FILE *dest);
+    write_func p_write_func = NULL;
 
-    fprintf(obj_file->file_ptr, "%lu %lu\n", (unsigned long)ic, (unsigned long)dc);
+    char *file_name= src->file_name_wout_ext;
 
-    for (i = 0; i < data_arr_obj_index; i++) {
-        if (!(*data_img_obj[i]).is_word_complete)
-            report = FAILURE;
-
-        // (*data_img_obj[i]).base64_word = convert_bin_to_base64((*data_img_obj)->symbol_t->address_binary);
-        if (!(*data_img_obj[i]).base64_word)
-            report = FAILURE;
-
-        fprintf(obj_file->file_ptr, "%s\n", (*data_img_obj[i]).base64_word);
+    if (dir == DEFAULT) {
+        dest = create_file_context(file_name, OBJECT_EXT, FILE_EXT_LEN, FILE_MODE_WRITE, &report);
+        p_write_func = write_data_img_to_stream;
+    } else if (dir == EXTERN) {
+        dest = create_file_context(file_name, EXTERNAL_EXT, FILE_EXT_LEN_OUT, FILE_MODE_WRITE, &report);
+        p_write_func = write_extern_to_stream;
+    } else if (dir == ENTRY) {
+        dest = create_file_context(file_name, ENTRY_EXT, FILE_EXT_LEN_OUT, FILE_MODE_WRITE, &report);
+        p_write_func = write_entry_to_stream;
     }
-    free_file_context(&obj_file);
+    else {
+        handle_error(TERMINATE, generate_output_by_dest);
+        return TERMINATE;
+    }
+
+    if (dest && p_write_func)
+        report = p_write_func(src, dest->file_ptr);
+    else
+        return TERMINATE;
+
+    if (report != NO_ERROR)
+        remove(dest->file_name);
+
+    free_file_context(&dest);
     return report;
 }
 
-/**
- * Generates the .ent or .ext output file depending on the directive.
- * The output is written to a file named [file_name].ent for ENTRY directive
- * and [file_name].ext for EXTERN directive.
- * The file_context is freed after generating the output.
- *
- * @param src A pointer to the source file_context.
- * @param dir The directive to generate the output for (ENTRY or EXTERN).
- * @return The status of the operation.
- *         Returns NO_ERROR if the output was generated without errors,
- *         FAILURE in case of an error,
- *         or TERMINATE if no output was generated (no relevant directive calls).
- */
-status generate_directive_output(file_context  *src, Directive dir) {
-    status report = NO_ERROR;
-    file_context *dest = create_file_context(src->file_name_wout_ext,dir == EXTERN ?
-    EXTERNAL_EXT : ENTRY_EXT, FILE_EXT_LEN_OUT, FILE_MODE_WRITE, &report);
+status write_data_img_to_stream(file_context *src, FILE *dest) {
+    size_t i;
+    int error_flag = 0;
+    data_image *runner = NULL;
 
-    if (!dest)
-        return report;
+    if (!data_arr_obj_index) return FAILURE; /* not an actual error, just no output file has been created */
 
-    report = (dir == ENTRY) ? write_entry_to_stream(src, dest->file_ptr) :
-            write_extern_to_stream(src, dest->file_ptr);
-
-    if (report != NO_ERROR) {
-        free_file_context(&dest);
-        remove(dest->file_name);
-        return report == FAILURE ? FAILURE : NO_ERROR;
+    for (i = 0; i < data_arr_obj_index; i++) {
+        runner = data_img_obj[i];
+        if (!runner->value && runner->p_sym) {
+            if (runner->p_sym->data) {
+                runner->value = runner->p_sym->data->value;
+            }
+            else {
+                error_flag = 1;
+                handle_error(ERR_LABEL_DOES_NOT_EXIST, src, runner->p_sym->label, runner->lc);
+            }
+        }
+        else if (!runner->is_word_complete && runner->concat == ADDRESS
+            && handle_address_reference(runner, runner->p_sym) != NO_ERROR) {
+            error_flag = 1;
+            handle_error(ERR_LABEL_DOES_NOT_EXIST, src, runner->p_sym->label, runner->lc);
+        }
     }
 
-    return NO_ERROR;
+    fprintf(dest, "%lu\t%lu", (unsigned long)DC, (unsigned long)IC);
+
+    for (i = 0; i < data_arr_obj_index && !error_flag; i++) {
+        if (!data_img_obj[i]->is_word_complete) {
+            create_base64_word(data_img_obj[i]);
+            data_img_obj[i]->is_word_complete = 1;
+        }
+        if (!data_img_obj[i]->base64_word) {
+            error_flag = 1;
+            handle_error(TERMINATE, "write_data_img_to_stream()");
+            break;
+        }
+        fprintf(dest, "\n%s", data_img_obj[i]->base64_word);
+    }
+    return error_flag ? TERMINATE : NO_ERROR;
 }
 
 /**
@@ -917,6 +963,8 @@ status write_entry_to_stream(file_context *src, FILE *dest) {
     int error_flag = 0;
     int has_entry = 0;
     symbol *runner = NULL;
+
+    if (!data_arr_obj_index) return FAILURE;
 
     for (i = 0; i < symbol_count; i++) {
         runner = symbol_table[i];
@@ -951,28 +999,30 @@ status write_extern_to_stream(file_context *src, FILE *dest) {
     data_image *runner = NULL;
     symbol *sym = NULL;
 
+    if (!data_arr_obj_index) return FAILURE;
+
     for (i = 0; i < data_arr_obj_index; i++) {
         runner = data_img_obj[i];
         if (runner && runner->p_sym && runner->p_sym->sym_dir == EXTERN) {
             has_extern = 1;
-            if (!(runner->value = malloc(sizeof (int)))) {
+            runner->p_sym->address_binary = decimal_to_binary12(EXTERNAL);
+            if (!runner->p_sym->address_binary || !(runner->value = malloc(sizeof (int)))) {
                 handle_error(ERR_MEM_ALLOC);
                 return ERR_MEM_ALLOC;
             }
             runner->p_sym->is_missing_info = 0;
             runner->p_sym->address_decimal = 0;
             *(runner->value) = 0;
+            runner->is_word_complete = 1;
             fprintf(dest, "%s\t%d\n", runner->p_sym->label, runner->data_address);
         }
     }
     for (i = 0; i < symbol_count; i++) {
         sym = symbol_table[i];
-        if (sym->sym_dir == EXTERN && sym->is_missing_info) {
-            error_flag = 1;
+        if (sym->sym_dir == EXTERN && sym->is_missing_info)
             handle_error(WARN_UNUSED_EXT, src, sym->label, sym->lc);
-        }
     }
-    return error_flag ? FAILURE : !has_extern ? TERMINATE : NO_ERROR;
+    return  !has_extern ? TERMINATE : NO_ERROR;
 }
 
 /**
@@ -981,6 +1031,7 @@ status write_extern_to_stream(file_context *src, FILE *dest) {
 void free_global_data_and_symbol() {
     free_data_image_array(&data_img_obj, &data_arr_obj_index);
     free_symbol_table(&symbol_table, &symbol_count);
+    DC = IC = 0;
 }
 
 /**
@@ -999,47 +1050,6 @@ void cleanup(file_context **src) {
     free_file_context(&p_src);
     *src = NULL;
     free_global_data_and_symbol();
-}
-
-/* TODO: REMOVE!!!!!!!!!!!!!!! */
-void test_out(file_context *src) { /*TODO: REMOVE */
-    size_t i;
-    int error_flag = 0;
-    status report;
-    data_image *runner = NULL;
-
-    if (!data_arr_obj_index) return;
-
-    printf("\n***** TESTING *****\n");
-    printf("\n***** START: write_extern_to_stream *****\n");
-    report = write_extern_to_stream(src, stdout);
-    printf("***** END: write_extern_to_stream - STATUS: %s *****\n", report != NO_ERROR ? "Failed" : "Passed");
-    printf("\n***** START: write_entry_to_stream *****\n");
-    report = write_entry_to_stream(src, stdout);
-    printf("***** END: write_entry_to_stream - STATUS: %s *****\n", report != NO_ERROR ? "Failed" : "Passed");
-    printf("\n\n***** START: print data_images *****\n");
-
-    for (i = 0; i < data_arr_obj_index; i++) {
-        runner = data_img_obj[i];
-        if (!runner->value && runner->p_sym) {
-            if (runner->p_sym->data)// && runner->p_sym->data->value)
-                runner->value = runner->p_sym->data->value;
-            else {
-                error_flag = 1;
-                handle_error(ERR_LABEL_DOES_NOT_EXIST, src, runner->p_sym->label, runner->lc);
-                continue;
-            }
-        }
-        if (!error_flag) printf("Data_image: @%p, value: %d\n",data_img_obj[i], *(data_img_obj[i]->value));
-    }
-
-    printf("DC: %lu\t | Actual Memory allocation for data_image: %lu\nBase-64 Words:\n",
-           (unsigned long)DC, (unsigned long)data_arr_obj_index);
-    for (i = 0; i < data_arr_obj_index && !error_flag; i++) {
-        create_base64_word(data_img_obj[i]);
-        printf("Data_image: @%p, value: %s\n",data_img_obj[i], data_img_obj[i]->base64_word);
-    }
-    printf("\n***** END: print data_images - STATUS: %s *****\n", error_flag ? "Failed" : "Passed");
 }
 
 

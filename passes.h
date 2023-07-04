@@ -27,11 +27,12 @@
 status is_valid_label(const char *label);
 status assembler_first_pass(file_context **src);
 status assembler_second_pass(file_context **src);
-status write_entry_to_stream(file_context *src, FILE *dest);
-status write_extern_to_stream(file_context *src, FILE *dest);
 status update_symbol_info(symbol* sym, int address);
 status process_line(file_context *src, char *p_line);
-status generate_obj_output(const char *file_name, size_t ic, size_t dc);
+status write_entry_to_stream(file_context *src, FILE *dest);
+status write_extern_to_stream(file_context *src, FILE *dest);
+status write_data_img_to_stream(file_context *src, FILE *dest);
+status generate_output_by_dest(file_context *src, Directive dir);
 status string_parser(file_context *src, char **word, char *ch, status *report);
 status assert_value_to_data(file_context *src, Directive dir, Value val_type, char *word, int **value,
                                                                    data_image **p_data, status *report);
@@ -51,14 +52,11 @@ void free_global_data_and_symbol();
 void process_data(file_context *src, const char *label, char *line, status *report);
 void process_string(file_context *src, const char *label, char *line, status *report);
 void handle_processing_line(file_context *src, char *line, symbol *sym, status *report);
-void handle_one_operand(file_context *src, Command cmd, const char *label, char *line, status *report);
 void handle_no_operands(file_context *src, Command cmd, const char *label, char *line, status *report);
+void handle_one_operand(file_context *src, Command cmd, const char *label, char *line, status *report);
+void handle_two_operands(file_context *src, Command cmd, const char *label, char *line, status *report);
 void process_directive(file_context *src, Directive dir, const char *label, char *line, status *report);
 void assert_data_img_by_label(file_context *src, const char *label, int *flag, int **value, data_image **p_data,
                                                                                                     status *report);
-
-int is_valid_register(const char* str);
-int is_valid_string(char **line, char **word, status *report);
-int is_label(file_context *src, const char *label, status *report);
 
 #endif

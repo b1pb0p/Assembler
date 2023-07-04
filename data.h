@@ -9,7 +9,6 @@
 #include "utils.h"
 
 #define REGISTER_CH '@'
-#define ZERO 0
 
 typedef enum {
     DEFAULT_12BIT,
@@ -18,7 +17,7 @@ typedef enum {
     REG_REG,
     ADDRESS,
     VALUE
-} concat_actions;
+} Concat_mode;
 
 typedef struct symbol symbol;
 
@@ -30,7 +29,7 @@ typedef struct {
     char* base64_word;
 
     Directive directive;
-    concat_actions concat;
+    Concat_mode concat;
     symbol *p_sym;
 
     int *value;
@@ -53,7 +52,7 @@ struct symbol {
 };
 
 char* decimal_to_binary12(int decimal);
-char* convert_bin_to_base64(const char* binary);
+char* binary12_to_base64(const char* binary);
 char* truncate_string(const char* input, int length);
 
 void free_symbol(symbol** symbol_t);
@@ -61,14 +60,21 @@ void free_data_image(data_image** data);
 void free_strings(int num_strings, ...);
 void free_symbol_table(symbol ***p_symbol_table, size_t *size);
 void free_data_image_array(data_image ***data_array, size_t *size);
-void process_data_image_dec_values(data_image *data, Adrs_mod src_op, Command opcode,
-                                             Adrs_mod dest_op, ARE are, status *report);
 
 int is_legal_addressing(file_context *src, Command cmd, Adrs_mod src_op, Adrs_mod dest_op, status *report);
 
 status create_base64_word(data_image* data);
+status handle_address_reference(data_image *data,  symbol *sym);
+status handle_register_data_img(data_image *data, Concat_mode con_act, char *reg, ...);
+status get_concat_mode(Adrs_mod src_op, Adrs_mod dest_op, Concat_mode *cn1, Concat_mode *cn2);
+status process_data_img_dec(data_image *data, Adrs_mod src_op, Command opcode, Adrs_mod dest_op, ARE are);
+
+ARE get_are(symbol *sym);
 
 data_image* create_data_image(int lc, int *address);
+data_image *assemble_operand_data_img(file_context *src, Concat_mode con_md, Adrs_mod mode, char* word, ...);
+
+Concat_mode get_concat_mode_one_op(Adrs_mod src_op, Adrs_mod dest_op);
 
 Adrs_mod get_addressing_mode(file_context *src, char *word, size_t word_len, status *report);
 

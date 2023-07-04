@@ -109,9 +109,12 @@ size_t get_word_length(char **ptr) {
     char *start;
     size_t length = 0;
 
-    while (**ptr && isspace((int)**ptr)) {
+    if (!**ptr)
+        return 0;
+
+    while (**ptr && isspace((int)**ptr))
         (*ptr)++;
-    }
+
     start = *ptr;
     while (**ptr && !isspace((int)**ptr)) {
         (*ptr)++;
@@ -119,6 +122,19 @@ size_t get_word_length(char **ptr) {
     }
 
     *ptr = start;
+    return length;
+}
+
+size_t get_length_until_comma_or_space(char *ptr) {
+    char *runner = ptr;
+    size_t length = 0;
+
+    while (runner && isspace((int) *runner))
+        runner++;
+    while (runner && *runner != ',' && !isspace((int) *runner)) {
+        runner++;
+        length++;
+    }
     return length;
 }
 
@@ -187,6 +203,125 @@ void unget_word(char **ptr, size_t word_length, char *line) {
     }
 }
 
+/**
+ * Safely converts a string to an integer.
+ * Does the same as atoi() but safer.
+ *
+ * @param str The string to convert to an integer.
+ * @return The converted integer value, or 0 if the conversion fails.
+ */
+int safe_atoi(const char *str) {
+    int result = 0;
+    int sign = 1;
+
+    if (!str)
+        return 0;
+
+    while (isspace(*str))
+        str++;
+
+    /* Check for sign */
+    if (*str == '-') {
+        sign = -1;
+        str++;
+    } else if (*str == '+')
+        str++;
+
+    while (isdigit(*str)) {
+        result = result * 10 + (*str - '0');
+        str++;
+    }
+
+    while (*str) {
+        if (!isspace(*str))
+            return 0;
+        str++;
+    }
+
+    return result * sign;
+}
+
+/**
+ * Checks if the given string is a valid register.
+ *
+ * @param str The string to validate as a register.
+ * @return The register number if the string is a valid register, or 0 if it's invalid.
+ */
+int is_valid_register(const char* str) {
+    if (str[0] == '@' && str[1] == 'r' &&
+        str[2] >= '0' && str[2] <= '7' &&
+        (str[3] == '\0' || isspace(str[3])))
+        return 1;
+    else
+        return 0;
+}
+
+/**
+ * Checks if the current line contains a valid string and extracts it as a word.
+ *
+ * @param line The current line being processed. Will be updated to skip leading whitespace and the extracted word.
+ * @param word Pointer to store the extracted word. Memory for the word should be allocated by the caller.
+ * @param report Pointer to the status report to indicate any errors.
+ * @return 1 if a valid string was found and extracted, 0 otherwise.
+ */
+int is_valid_string(char **line, char **word, status *report) {
+    if (**line == '\0' || **line == '\n')
+        return 0;
+
+    while (**line && isspace(**line))
+        (*line)++;
+
+    *word = malloc(sizeof(char) * get_word_length(line) + 1);
+
+    if (!*word || !get_word(line, *word, COMMA)) {
+        *report = ERR_MEM_ALLOC;
+        handle_error(ERR_MEM_ALLOC);
+        return 0;
+    }
+
+    return 1;
+}
+
+/**
+ * Checks if a string is a valid label.
+ *
+ * @param label The string to check.
+ * @return NO_ERROR if the string is a valid label, an appropriate error status otherwise.
+ *
+ * @remarks The function checks if the label meets the following criteria:
+ *   - The label is not NULL and has a length between 1 and MAX_LABEL_LENGTH characters.
+ *   - The label does not match any reserved command or sym_dir.
+ *   - The label does not start with a digit.
+ *   - The label consists only of alphanumeric characters.
+ *   - The label ends with a colon (':') to indicate a label declaration.
+ */
+status is_valid_label(const char *label) {
+    size_t length = strlen(label);
+    int i;
+
+    if (!label || length == 0  || length > MAX_LABEL_LENGTH ||
+        is_command(label) == INV_CMD || is_directive(label + 1) ||
+        is_directive(label))
+        return ERR_INVALID_LABEL;
+
+    if (isdigit(*label))
+        return ERR_LABEL_START_DIGIT;
+
+    if (!isalpha(*label))
+        return ERR_ILLEGAL_CHARS;
+
+    for (i = 1; i < length - 1; i++)
+        if (!isalnum(label[i]))
+            return ERR_ILLEGAL_CHARS;
+
+    if (label[length - 1] != ':' && !isalnum(label[length - 1]))
+        return ERR_ILLEGAL_CHARS;
+
+    if (label[length - 1] == ':')
+        return NO_ERROR;
+
+    return ERR_MISSING_COLON;
+}
 
 /**
  * Copy a string from source to target and allocate memory for the target
