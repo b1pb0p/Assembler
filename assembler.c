@@ -25,11 +25,26 @@ break;
 
 status preprocess_file(const char* file_name, file_context** dest , int index, int max);
 
+/* TODO: REMOVE!!!!!!!!!!!!!!! */
+void test_out(file_context *src) { /*TODO: REMOVE */
+    status report;
+
+    printf("\n***** TESTING *****\n");
+    printf("\n***** START: write_extern_to_stream *****\n");
+    report = write_extern_to_stream(src, stdout);
+    printf("***** END: write_extern_to_stream - STATUS: %s *****\n", report != NO_ERROR ? "Failed" : "Passed");
+    printf("\n***** START: write_entry_to_stream *****\n");
+    report = write_entry_to_stream(src, stdout);
+    printf("***** END: write_entry_to_stream - STATUS: %s *****\n", report != NO_ERROR ? "Failed" : "Passed");
+    printf("\n***** START: print data_images *****\n");
+    report = write_data_img_to_stream(src, stdout);
+    printf("\n***** END: print data_images - STATUS: %s *****\n", report != NO_ERROR ? "Failed" : "Passed");
+}
+
 void test() { /** TODO: remove after testing!! */
 #define number_of_lines 4
     symbol *sym = NULL;
     FILE* previousStderr = freopen("debug/error.log", "w", stderr);
-    void test_out(file_context *src);
     char *data_lines[number_of_lines] = {
             "LENGTH: .data XYZ , -9,15",
             ".data LENGTH,9, 7, 9",
@@ -52,7 +67,7 @@ void test() { /** TODO: remove after testing!! */
 
     char *ext_lines[number_of_lines] = {
             "VAL: .extern PI",
-            ".extern PI, HELLO"
+            ".extern HELLO"
     };
 
     char label[36];
@@ -134,6 +149,53 @@ void test() { /** TODO: remove after testing!! */
     test_out(fc);
     freopen("/dev/tty", "w", stderr);
 }
+
+void cmd_test() {
+    FILE* previousStderr = freopen("debug/error.log", "w", stderr);
+    char *cmd_lines[number_of_lines] = {
+            "prn -5",
+            "END: stop",
+            "LENGTH: .data -9,15",
+            "MAIN: mov @r3 ,LENGTH"
+    };
+    char label[36];
+    char temp[36];
+    int i;
+    size_t size;
+    status code = NO_ERROR;
+    file_context *fc = create_file_context("as", ASSEMBLY_EXT, FILE_EXT_LEN, FILE_MODE_READ, &code);
+    code = NO_ERROR;
+
+    printf("Processing ... %s\n",cmd_lines[0]);
+    size = get_word(&cmd_lines[0], temp, SPACE);
+    handle_one_operand(fc,PRN, NULL, cmd_lines[0], &code);
+    fc->lc++;
+
+    printf("Processing ... %s\n",cmd_lines[1]);
+    size = get_word(&cmd_lines[1], label, SPACE);
+    (void)declare_label(fc, label, size, &code);
+    size = get_word(&cmd_lines[1], temp, SPACE);
+    handle_no_operands(fc, STOP, label, cmd_lines[1], &code);
+
+    fc->lc++;
+    printf("Processing ... %s\n",cmd_lines[2]);
+    size = get_word(&cmd_lines[2], label, SPACE);
+    (void)declare_label(fc, label, size, &code);
+    get_word(&cmd_lines[2], temp, SPACE);
+    process_data(fc, label, cmd_lines[2], &code);
+
+    fc->lc++;
+    printf("Processing ... %s\n",cmd_lines[3]);
+    size = get_word(&cmd_lines[3], label, SPACE);
+    (void)declare_label(fc, label, size, &code);
+    size = get_word(&cmd_lines[3], temp, SPACE);
+    handle_two_operands(fc, MOV, label, cmd_lines[3], &code);
+    test_out(fc);
+
+
+
+    freopen("/dev/tty", "w", stderr);
+}
 /** TODO: remove after testing!! */
 
 int main(int argc, char *argv[]) {
@@ -145,7 +207,8 @@ int main(int argc, char *argv[]) {
         handle_error(FAILURE);
         exit(FAILURE);
     }
-    test();
+   // test();
+    cmd_test();
     return 0;
 
     for (i = 1; i < argc; i++) {
