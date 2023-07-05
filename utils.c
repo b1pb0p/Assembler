@@ -242,16 +242,25 @@ int safe_atoi(const char *str) {
 }
 
 /**
- * Checks if the given string is a valid register.
+ * Validates if the given string is a valid register.
  *
+ * @param src Pointer to file context for error handling.
  * @param str The string to validate as a register.
- * @return The register number if the string is a valid register, or 0 if it's invalid.
+ * @param report Pointer to status report for error indication.
+ * @return The register number if valid, or 0 if invalid.
  */
-int is_valid_register(const char* str) {
-    if (str[0] == '@' && str[1] == 'r' &&
-        str[2] >= '0' && str[2] <= '7' &&
-        (str[3] == '\0' || isspace(str[3])))
+int is_valid_register(file_context *src, const char* str, status *report) {
+    int missing_at_key = 0;
+    if (*str != '@')
+        missing_at_key = 1;
+
+    if (str[1] == 'r' && str[2] >= '0' && str[2] <= '7' && (str[3] == '\0' || isspace(str[3]))) {
+        if (missing_at_key) {
+            handle_error(ERR_MISS_ADDRESS_MARK, src);
+            *report = ERR_MISS_ADDRESS_MARK;
+        }
         return 1;
+    }
     else
         return 0;
 }
@@ -259,19 +268,21 @@ int is_valid_register(const char* str) {
 /**
  * Checks if the current line contains a valid string and extracts it as a word.
  *
- * @param line The current line being processed. Will be updated to skip leading whitespace and the extracted word.
+ * @param line The current line being processed. It will be updated to skip leading whitespace and the extracted word.
  * @param word Pointer to store the extracted word. Memory for the word should be allocated by the caller.
  * @param report Pointer to the status report to indicate any errors.
- * @return 1 if a valid string was found and extracted, 0 otherwise.
+ * @return The length of the extracted word if a valid string was found and extracted, 0 otherwise.
  */
-int is_valid_string(char **line, char **word, status *report) {
+size_t is_valid_string(char **line, char **word, status *report) {
+    size_t length;
+
     if (**line == '\0' || **line == '\n')
         return 0;
 
     while (**line && isspace(**line))
         (*line)++;
 
-    *word = malloc(sizeof(char) * get_word_length(line) + 1);
+    *word = malloc(sizeof(char) * (length = get_word_length(line)) + 1);
 
     if (!*word || !get_word(line, *word, COMMA)) {
         *report = ERR_MEM_ALLOC;
@@ -279,7 +290,7 @@ int is_valid_string(char **line, char **word, status *report) {
         return 0;
     }
 
-    return 1;
+    return length;
 }
 
 /**

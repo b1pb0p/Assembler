@@ -206,7 +206,7 @@ data_image *assemble_operand_data_img(file_context *src, Concat_mode con_md, Adr
     status temp_report;
     data_image *data = add_data_image(src, NULL, &temp_report);
 
-    if (!data) {
+    if (!data || !(data->concat = con_md)) {
         handle_error(ERR_MEM_ALLOC);
         return NULL;
     } else if (mode == DIRECT) {
@@ -247,7 +247,7 @@ status handle_register_data_img(data_image *data, Concat_mode con_act, char *reg
         data->binary_dest = decimal_to_binary12(get_register_num(sec_reg));
         va_end(args);
     }
-    return create_base64_word(data) && (data->is_word_complete = 1) ? NO_ERROR : FAILURE;
+    return create_base64_word(data) == NO_ERROR && (data->is_word_complete = 1) ? NO_ERROR : FAILURE;
 }
 
 status handle_address_reference(data_image *data,  symbol *sym) {
@@ -288,7 +288,7 @@ Concat_mode get_concat_mode_one_op(Adrs_mod src_op, Adrs_mod dest_op) {
         return REG_DEST;
     else {
         handle_error(TERMINATE, "get_concat_mode_one_op()");
-        return -1;
+        return ILLEGAL_CONCAT;
     }
 }
 
@@ -302,7 +302,7 @@ Concat_mode get_concat_mode_one_op(Adrs_mod src_op, Adrs_mod dest_op) {
  */
 status create_base64_word(data_image *data) {
     status report = NO_ERROR;
-    char* binary_word = malloc((BINARY_BITS + 1) * sizeof(char));
+    char *binary_word = malloc((BINARY_BITS + 1) * sizeof(char));
 
     if (!binary_word) {
         handle_error(ERR_MEM_ALLOC);
@@ -341,6 +341,7 @@ status create_base64_word(data_image *data) {
     }
 
     free(binary_word);
+    binary_word = NULL;
     return report;
 }
 
@@ -460,7 +461,7 @@ status concat_reg_src(data_image *data, char** binary_word) {
         memset(*binary_word, '0', BINARY_BITS);
         strncpy(*binary_word, src_op, REGISTER_BINARY_LEN); /* start from 11 --> 7 */
     }
-
+    (*binary_word)[BINARY_BITS] = '\0';
     free_strings(AMT_WORD_1, &src_op);
     return report;
 }
@@ -538,8 +539,7 @@ status concat_address(data_image *data, char** binary_word) {
 Adrs_mod get_addressing_mode(file_context *src, char *word, size_t word_len, status *report) {
     Value val_type;
     if (*word == REGISTER_CH) {
-        val_type = NUM;
-        if (is_valid_register(word))
+        if (is_valid_register(src, word, report))
             return REGISTER;
         handle_error(ERR_INVALID_REGISTER, src);
         return INVALID_MD;

@@ -17,7 +17,7 @@
 #define MAX_BUFFER_LENGTH 256
 
 #define FILE_MODE_READ "r"
-#define FILE_MODE_WRITE "w"
+#define FILE_MODE_WRITE_PLUS "w+"
 #define ASSEMBLY_EXT ".as"
 #define PREPROCESSOR_EXT  ".am"
 #define OBJECT_EXT  ".ob"
@@ -92,9 +92,10 @@ typedef struct {
 char *strdup(const char *s);
 
 int safe_atoi(const char *str);
-int is_valid_register(const char* str);
-int is_valid_string(char **line, char **word, status *report);
 int is_label(file_context *src, const char *label, status *report);
+int is_valid_register(file_context *src, const char* str, status *report);
+
+size_t is_valid_string(char **line, char **word, status *report);
 
 void free_file_context(file_context** context);
 void unget_word(char **ptr, size_t word_length, char *line);

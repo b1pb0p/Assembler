@@ -19,9 +19,7 @@
     if ((report) != NO_ERROR) {      \
     handle_error(ERR_FOUND_ASSEMBLER, (file));\
         continue;                    \
-    }                                      \
-else \
-break;
+    }
 
 status preprocess_file(const char* file_name, file_context** dest , int index, int max);
 
@@ -208,19 +206,19 @@ int main(int argc, char *argv[]) {
         exit(FAILURE);
     }
    // test();
-    cmd_test();
-    return 0;
+    // cmd_test();
+    //return 0;
 
     for (i = 1; i < argc; i++) {
         report = preprocess_file(argv[i], &dest_am, i, argc - 1);
-        if (report != NO_ERROR && assembler_first_pass(&dest_am))
+        CHECK_ERROR_CONTINUE(report, argv[i]);
+        if (assembler_first_pass(&dest_am) != NO_ERROR)
             handle_error(ERR_FIRST_PASS, i, argc - 1, argv[i]);
         else
             handle_progress(FIRST_PASS_OK, i, argc - 1, argv[i]);
         CHECK_ERROR_CONTINUE(report, argv[i]);
     }
 
-    /* TODO: update goodbye message */
     return 0;
 }
 
@@ -247,7 +245,7 @@ status preprocess_file(const char* file_name, file_context** dest , int index, i
 
     handle_progress(OPEN_FILE, src);
 
-    *dest = create_file_context(file_name, PREPROCESSOR_EXT,  FILE_EXT_LEN, FILE_MODE_WRITE, &code);
+    *dest = create_file_context(file_name, PREPROCESSOR_EXT, FILE_EXT_LEN, FILE_MODE_WRITE_PLUS, &code);
     HANDLE_STATUS(*dest, code);
 
     code = assembler_preprocessor(src, *dest);

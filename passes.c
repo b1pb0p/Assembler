@@ -91,7 +91,7 @@ status process_line(file_context *src, char *p_line) {
     size_t word_len = get_word(&p_line, first_word, SPACE);
 
     is_valid_label_exist = is_label(src, first_word, &report)
-                           && (sym = declare_label(src, first_word, word_len, &report)) && report != ERR_MEM_ALLOC;
+            && (sym = declare_label(src, first_word, word_len, &report)) && report != ERR_MEM_ALLOC;
 
 
     if (is_valid_label_exist) /* Label declaration following a Directive or a Command */
@@ -117,23 +117,24 @@ void handle_processing_line(file_context *src, char *line, symbol *sym, status *
     word_len =  get_word(&line, next_word, SPACE);
     if (sym) p_label = sym->label;
 
-    condition = word_len && !is_label(src, next_word, NULL) &&
-                ((dir = is_directive(next_word + 1) || (cmd = is_command(next_word)) != INV_CMD));
-
-    if (!condition)  {
+    condition = word_len && ((dir = is_directive(next_word)) || (dir = is_directive(next_word + 1)));
+    if (!condition || (!word_len && (cmd = is_command(next_word)) != INV_CMD))  {
         *report = FAILURE;
         handle_error(ERR_INVALID_ACTION, src, "label" ,!word_len ? "[End of line]" : next_word);
         return;
     }
 
-    if (cmd == RTS || cmd == STOP) {
-        p_data_image->binary_opcode = decimal_to_binary12(cmd);
-        if (!p_data_image->binary_opcode) *report = FAILURE;
-    }
+    if (cmd != INV_CMD && !dir)
+        process_command(src, cmd, p_label, line, report);
     else if (dir == ENTRY || dir == EXTERN)
         process_directive(src, dir, p_label, line, report);
-    else if (dir == STRING || dir == DATA)
+    else if (dir == STRING || dir == DATA) {
+        if (*next_word != '.') {
+            handle_error(ERR_MISSING_DOT, src);
+            *report = ERR_MISSING_DOT;
+        }
         dir == STRING ? process_string(src, p_label, line, report) : process_data(src, p_label, line, report);
+    }
 }
 
 /**
@@ -301,7 +302,6 @@ void process_command(file_context *src,  Command cmd, const char *label, char *l
         *report = TERMINATE;
         handle_error(TERMINATE, "process_command()");
     }
-
     *report = *report == ERR_MEM_ALLOC || temp_report == NO_ERROR ? *report : temp_report;
 
 }
@@ -360,7 +360,7 @@ void handle_one_operand(file_context *src, Command cmd, const char *label, char 
     Adrs_mod op_mode;
     status temp_report;
     size_t word_len;
-    Concat_mode concat;
+    Concat_mode concat = ILLEGAL_CONCAT;
 
     word = malloc(sizeof(char) * get_word_length(&line));
     word_len = get_word(&line, word, COMMA);
@@ -396,6 +396,7 @@ void handle_one_operand(file_context *src, Command cmd, const char *label, char 
         return;
     }
     p_data_word->is_word_complete = 1;
+    IC += 2;
 }
 
 /**
@@ -418,15 +419,15 @@ void handle_two_operands(file_context *src, Command cmd, const char *label, char
     data_image *p_data_sec_op = NULL;
     Adrs_mod op_mode, sec_op_mode;
     status temp_report;
-    Concat_mode concat_1 = -1, concat_2 = -1;
+    Concat_mode concat_1 = ILLEGAL_CONCAT, concat_2 = ILLEGAL_CONCAT;
     size_t word_len, word_len_sec;
 
-    /* TODO: USE LINE PARSER TO IF VALID */
-    word_len =  get_word(&line, (word = malloc(get_length_until_comma_or_space(line))), COMMA);
-    if (*line == ',') line++;
-    word_len_sec = get_word(&line, (next_word =  malloc(get_length_until_comma_or_space(line))), COMMA);
+    word_len =  is_valid_string(&line, &word, report);
+    (void) line_parser(src, DEFAULT, &line, word, &temp_report);
+    word_len_sec =  is_valid_string(&line, &next_word, report);
+    (void) line_parser(src, DEFAULT, &line, next_word, &temp_report);
 
-    if (!word_len || !word_len_sec || !word) {
+    if (!word || !next_word) {
         *report = *report == ERR_MEM_ALLOC ? ERR_MEM_ALLOC : ERR_MISS_OPERAND;
         handle_error(ERR_MISS_OPERAND, src);
         if (word) free(word);
@@ -435,15 +436,15 @@ void handle_two_operands(file_context *src, Command cmd, const char *label, char
     } else if (get_word_length(&line)) {
         *report = ERR_EXTRA_TEXT;
         handle_error(ERR_EXTRA_TEXT, src);
-    } else if (word_len > MAX_LABEL_LENGTH) {
+    } else if (word_len > MAX_LABEL_LENGTH || word_len_sec > MAX_LABEL_LENGTH) {
         *report = ERR_OPERAND_TOO_LONG;
         handle_error(ERR_OPERAND_TOO_LONG);
     }
 
     op_mode = get_addressing_mode(src, word, word_len, report);
-    sec_op_mode = get_addressing_mode(src, word, word_len_sec, report);
+    sec_op_mode = get_addressing_mode(src, next_word, word_len_sec, report);
 
-    if (!is_legal_addressing(src, cmd, sec_op_mode, op_mode, report) ||
+    if (!is_legal_addressing(src, cmd, op_mode, sec_op_mode, report) ||
             get_concat_mode(op_mode, sec_op_mode, &concat_1, &concat_2) != NO_ERROR) {
         free(word);
         if (next_word) free(next_word);
@@ -456,7 +457,7 @@ void handle_two_operands(file_context *src, Command cmd, const char *label, char
         p_data_op = assemble_operand_data_img(src, concat_1, op_mode, word, next_word);
     else {
         p_data_op = assemble_operand_data_img(src, concat_1, op_mode, word);
-        p_data_sec_op = assemble_operand_data_img(src, concat_2, sec_op_mode, word);
+        p_data_sec_op = assemble_operand_data_img(src, concat_2, sec_op_mode, next_word);
     }
     temp_report = process_data_img_dec(p_data_word, op_mode, cmd, sec_op_mode, ABSOLUTE);
 
@@ -468,16 +469,21 @@ void handle_two_operands(file_context *src, Command cmd, const char *label, char
         return;
     }
     p_data_word->is_word_complete = 1;
+    if (concat_1 == REG_REG) {
+        p_data_op->is_word_complete = 1;
+        IC += 2;
+        return;
+    }
     if (op_mode == IMMEDIATE || op_mode == REGISTER) p_data_op-> is_word_complete = 1;
     if (sec_op_mode == IMMEDIATE || sec_op_mode == REGISTER) p_data_sec_op-> is_word_complete = 1;
-    if (concat_1 == REG_REG) p_data_op->is_word_complete = 1;
+    IC += 3; /* Instruction + 2 operands words */
 }
 
 
 Value line_parser(file_context *src, Directive dir, char **line, char *word, status *report) {
     size_t length;
 
-    if (dir == DEFAULT) {
+    if (dir != DEFAULT && dir != STRING && dir != DATA) {
         *report = TERMINATE;
         handle_error(TERMINATE, "line_parser()");
         return INV;
@@ -879,13 +885,13 @@ status generate_output_by_dest(file_context *src, Directive dir) {
     char *file_name= src->file_name_wout_ext;
 
     if (dir == DEFAULT) {
-        dest = create_file_context(file_name, OBJECT_EXT, FILE_EXT_LEN, FILE_MODE_WRITE, &report);
+        dest = create_file_context(file_name, OBJECT_EXT, FILE_EXT_LEN, FILE_MODE_WRITE_PLUS, &report);
         p_write_func = write_data_img_to_stream;
     } else if (dir == EXTERN) {
-        dest = create_file_context(file_name, EXTERNAL_EXT, FILE_EXT_LEN_OUT, FILE_MODE_WRITE, &report);
+        dest = create_file_context(file_name, EXTERNAL_EXT, FILE_EXT_LEN_OUT, FILE_MODE_WRITE_PLUS, &report);
         p_write_func = write_extern_to_stream;
     } else if (dir == ENTRY) {
-        dest = create_file_context(file_name, ENTRY_EXT, FILE_EXT_LEN_OUT, FILE_MODE_WRITE, &report);
+        dest = create_file_context(file_name, ENTRY_EXT, FILE_EXT_LEN_OUT, FILE_MODE_WRITE_PLUS, &report);
         p_write_func = write_entry_to_stream;
     }
     else {
@@ -1044,7 +1050,6 @@ void free_global_data_and_symbol() {
  */
 void cleanup(file_context **src) {
     file_context *p_src = *src;
-
     fclose(p_src->file_ptr);
     remove(p_src->file_name);
     free_file_context(&p_src);

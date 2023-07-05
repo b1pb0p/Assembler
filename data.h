@@ -16,7 +16,8 @@ typedef enum {
     REG_SRC,
     REG_REG,
     ADDRESS,
-    VALUE
+    VALUE,
+    ILLEGAL_CONCAT = -1
 } Concat_mode;
 
 typedef struct symbol symbol;

@@ -52,6 +52,7 @@ void free_global_data_and_symbol();
 void process_data(file_context *src, const char *label, char *line, status *report);
 void process_string(file_context *src, const char *label, char *line, status *report);
 void handle_processing_line(file_context *src, char *line, symbol *sym, status *report);
+void process_command(file_context *src,  Command cmd, const char *label, char *line, status *report);
 void handle_no_operands(file_context *src, Command cmd, const char *label, char *line, status *report);
 void handle_one_operand(file_context *src, Command cmd, const char *label, char *line, status *report);
 void handle_two_operands(file_context *src, Command cmd, const char *label, char *line, status *report);
