@@ -80,6 +80,7 @@ file_context* create_file_context(const char* file_name, char* ext, size_t ext_l
 
     fc->file_name = NULL;
     fc->file_ptr = NULL;
+    fc->tc = fc->tc = 0;
 
     copy_n_string(&fc->file_name, file_name_w_ext, len);
     free(file_name_w_ext);
@@ -125,19 +126,6 @@ size_t get_word_length(char **ptr) {
     return length;
 }
 
-size_t get_length_until_comma_or_space(char *ptr) {
-    char *runner = ptr;
-    size_t length = 0;
-
-    while (runner && isspace((int) *runner))
-        runner++;
-    while (runner && *runner != ',' && !isspace((int) *runner)) {
-        runner++;
-        length++;
-    }
-    return length;
-}
-
 /**
  * Extracts the next word from the input string pointed to by 'ptr'.
  * The word is delimited by whitespace or a specific delimiter character.
@@ -179,28 +167,6 @@ size_t get_word(char **ptr, char *word, Delimiter delimiter) {
     word[length] = '\0';
 
     return length;
-}
-
-/**
- * Pushes the pointer back to the beginning of the previous word, accounting for unknown spaces or tabs.
- * If the previous word contains spaces or tabs, it goes back to the first character of the word.
- *
- * @param ptr The pointer to the input string. It will be updated to point to the previous word.
- * @param word_length The length of the previous word.
- * @param line The input line as a string.
- */
-void unget_word(char **ptr, size_t word_length, char *line) {
-    if (word_length > 0) {
-        *ptr -= word_length;
-        while (word_length > 0 && (isspace((int)(*ptr)[-1]) || (*ptr)[-1] == '\t')) {
-            (*ptr)--;
-            word_length--;
-        }
-        while (word_length > 0 && (*ptr)[-1] != '\0' && (*ptr)[-1] != '\n') {
-            (*ptr)--;
-            word_length--;
-        }
-    }
 }
 
 /**
@@ -311,7 +277,7 @@ status is_valid_label(const char *label) {
     int i;
 
     if (!label || length == 0  || length > MAX_LABEL_LENGTH ||
-        is_command(label) == INV_CMD || is_directive(label + 1) ||
+        is_command(label) != INV_CMD || is_directive(label + 1) ||
         is_directive(label))
         return ERR_INVALID_LABEL;
 
@@ -332,6 +298,84 @@ status is_valid_label(const char *label) {
         return NO_ERROR;
 
     return ERR_MISSING_COLON;
+}
+
+int is_label(file_context *src, const char *label, status *report) {
+    status ret_val = is_valid_label(label);
+
+    if (!report)  /* Do not print error messages if report is NULL */
+        return ret_val == ERR_INVALID_LABEL ? 0 : 1;
+    if (ret_val == NO_ERROR)
+        return 1;
+
+    *report = ret_val;
+
+    if (ret_val == ERR_INVALID_LABEL) {
+        handle_error(ERR_INVALID_LABEL, src, label);
+        return 0;
+    }
+
+    ret_val == ERR_MISSING_COLON ? handle_error(ret_val, src) : ret_val == ERR_ILLEGAL_CHARS ?
+                                                                handle_error(ret_val, src, "Label",label) : handle_error(ret_val, src, label);
+    return 1;
+}
+
+Value validate_data(file_context *src, char *word, size_t length, status *report) {
+    char *p_word = NULL;
+    status temp_report;
+
+    if (*word == '+' || *word == '-')
+        word++;
+
+    if (isalpha(*word)) {
+        if (word[length - 1] == ':') {
+            word[length - 1] = '\0';
+            handle_error(ERR_FORBIDDEN_LABEL_DECLARE, src, word);
+            *report =  ERR_FORBIDDEN_LABEL_DECLARE;
+        }
+        temp_report = is_valid_label(word);
+        if (temp_report != NO_ERROR && temp_report != ERR_MISSING_COLON) {
+            *report =  ERR_INVALID_SYNTAX;
+            return INV;
+        }
+        return LBL;
+    }
+    else if (isdigit(*word)) {
+        p_word = word;
+        while (!isspace(*p_word) && *p_word != '\0' && *p_word != '\n') {
+            if (!isdigit(*p_word)) {
+                handle_error(ERR_INVALID_SYNTAX, src);
+                *report = ERR_INVALID_SYNTAX;
+                return INV;
+            }
+            p_word++;
+        }
+        return NUM;
+    }
+    return INV;
+}
+
+Value validate_string(file_context *src, char *word, size_t length, status *report) {
+    status temp_report;
+    if (*word == '\"') {
+        if (word[length - 1] != '\"') {
+            *report = ERR_MISSING_QMARK;
+            handle_error(ERR_MISSING_QMARK, src);
+        }
+        return isalpha(word[1]) ? STR : INV;
+    }
+    else {
+        if (word[length - 1] == '\"') {
+            *report = ERR_MISSING_QMARK;
+            return isalpha(word[1]) ? STR : INV;
+        }
+        temp_report = is_valid_label(word);
+        if (temp_report != NO_ERROR && temp_report != ERR_MISSING_COLON) {
+            *report = ERR_INVALID_SYNTAX;
+            return INV;
+        }
+        return LBL;
+    }
 }
 
 /**
@@ -400,24 +444,6 @@ status copy_n_string(char** target, const char* source, size_t count) {
 }
 
 /**
- * Skips leading white spaces (spaces, tabs, and newlines) in a line and updates the line pointer.
- *
- * @param line The line to skip white spaces from.
- * @return Status indicating the result of the operation: NO_ERROR if successful, or EOF if end of line reached.
- */
-status skip_white_spaces(char *line) {
-    int i;
-
-    for (i = 0; line[i] == ' ' || line[i] == '\t' || line[i] == '\n'; i++)
-        ;
-    if (line[i] == '\0' || line[i] == '\n')
-        return EOF;
-
-    strcpy(line, line + i);
-    return NO_ERROR;
-}
-
-/**
  * Checks if a given string is a valid Directive.
  *
  * @param src The string to check.
@@ -444,7 +470,7 @@ Command is_command(const char* src) {
         for (i = 0; i < COMMANDS_LEN; i++)
             if (strcmp(src, commands[i]) == 0)
                 return i; /* Corresponding Command*/
-    return 0;
+    return INV_CMD;
 }
 
 /**
@@ -484,19 +510,3 @@ void free_file_context(file_context** context) {
     }
 }
 
-/**
- * Frees the memory occupied by an array of file_context structures.
- * Calls the free_file_context function to free each individual file_context structure in the array.
- *
- * @param contexts The array of file_context pointers to be freed.
- * @param size The size of the array.
- */
-void free_file_context_array(file_context** contexts, int size) {
-    int i;
-
-    if (!contexts)
-        return;
-
-    for (i = 0; i < size; i++)
-        if(contexts[i]) free_file_context(&contexts[i]);
-}

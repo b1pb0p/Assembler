@@ -86,6 +86,8 @@ typedef struct {
     char* file_name;
     char* file_name_wout_ext;
     int lc; /* Line counter */
+    int tc; /* total file counter */
+    int fc; /* file counter (x out of tc) */
 } file_context;
 
 
@@ -95,19 +97,18 @@ int safe_atoi(const char *str);
 int is_label(file_context *src, const char *label, status *report);
 int is_valid_register(file_context *src, const char* str, status *report);
 
-size_t is_valid_string(char **line, char **word, status *report);
-
 void free_file_context(file_context** context);
-void unget_word(char **ptr, size_t word_length, char *line);
-void free_file_context_array(file_context** contexts, int size);
 
 size_t get_word_length(char **ptr);
-size_t get_length_until_comma_or_space(char *ptr);
 size_t get_word(char **ptr, char *word, Delimiter delimiter);
+size_t is_valid_string(char **line, char **word, status *report);
 
-status skip_white_spaces(char *line);
+status is_valid_label(const char *label);
 status copy_string(char** target, const char* source);
 status copy_n_string(char** target, const char* source, size_t count);
+
+Value validate_data(file_context *src, char *word, size_t length, status *report);
+Value validate_string(file_context *src, char *word, size_t length, status *report);
 
 Command is_command(const char* src);
 Directive is_directive(const char* src);
