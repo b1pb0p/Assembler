@@ -78,7 +78,7 @@ status assembler_preprocessor(file_context *src, file_context *dest) {
         src->lc++;
     }
     /* Reset line counter and rewind files */
-    dest->lc = 0;
+    dest->lc = 1;
     rewind(dest->file_ptr);
 
 
@@ -122,6 +122,14 @@ status handle_macro_start(file_context *src, char *line, int *found_macro,
             handle_error(ERR_MISSING_ENDMACRO, src);
             if (**macro_body) free(*macro_body);
             *macro_body = NULL;
+        }
+        else if (endmcro){
+            COUNT_SPACES(line_offset, endmcro);
+            endmcro += SKIP_MCR0_END + line_offset;
+            if (endmcro[line_offset] != '\0') {
+                handle_error(ERR_EXTRA_TEXT, src); /* Extraneous text after endmacro */
+                report = FAILURE;
+            }
         }
     }
     else {
@@ -175,7 +183,7 @@ status handle_macro_start(file_context *src, char *line, int *found_macro,
             endmcro += line_offset + get_word_length(&endmcro);
             COUNT_SPACES(line_offset, endmcro);
             if (endmcro[line_offset] != '\0') {
-                handle_error(ERR_EXTRA_TEXT, src); /* Extraneous text after macros name */
+                handle_error(ERR_EXTRA_TEXT, src); /* Extraneous text after macro */
                 report = FAILURE;
             }
 
