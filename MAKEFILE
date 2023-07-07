@@ -1,7 +1,7 @@
-Assembler: assembler.o preprocessor.o utils.o errors.o
-	gcc -ansi -Wall assembler.o preprocessor.o utils.o errors.o -o Assembler
+Assembler: assembler.o preprocessor.o utils.o errors.o passes.o data.o
+	gcc -ansi -Wall assembler.o preprocessor.o utils.o errors.o passes.o data.o -o Assembler
 
-assembler.o: assembler.c preprocessor.h utils.h errors.h
+assembler.o: assembler.c preprocessor.h utils.h errors.h data.h passes.h
 	gcc -ansi -pedantic -Wall -c assembler.c
 
 preprocessor.o: preprocessor.c preprocessor.h utils.h errors.h
@@ -10,7 +10,7 @@ preprocessor.o: preprocessor.c preprocessor.h utils.h errors.h
 utils.o: utils.c utils.h errors.h
 	gcc -ansi -pedantic -Wall -c utils.c
 
-errors.o: errors.c utils.h errors.h
+errors.o: errors.c errors.h utils.h
 	gcc -ansi -pedantic -Wall -c errors.c
 
 data.o: data.c data.h utils.h errors.h passes.h
