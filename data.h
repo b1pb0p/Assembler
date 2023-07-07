@@ -72,7 +72,7 @@ status process_data_img_dec(data_image *data, Adrs_mod src_op, Command opcode, A
 
 ARE get_are(symbol *sym);
 
-data_image* create_data_image(int lc, int *address);
+data_image *create_data_image(int lc, int *address);
 data_image *assemble_operand_data_img(file_context *src, Concat_mode con_md, Adrs_mod mode, char* word, ...);
 
 Concat_mode get_concat_mode_one_op(Adrs_mod src_op, Adrs_mod dest_op);

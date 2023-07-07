@@ -24,7 +24,6 @@
 #define AMT_WORD_1 1
 #define ADDRESS_START 100
 
-status is_valid_label(const char *label);
 status assembler_first_pass(file_context **src);
 status assembler_second_pass(file_context **src);
 status update_symbol_info(symbol* sym, int address);
@@ -41,8 +40,6 @@ symbol* find_symbol(const char* label);
 symbol* add_symbol(file_context *src, const char* label, int address, status *report);
 symbol *declare_label(file_context *src, char *label, size_t label_len, status *report);
 
-Value validate_data(file_context *src, char *word, size_t length, status *report);
-Value validate_string(file_context *src, char *word, size_t length, status *report);
 Value line_parser(file_context *src, Directive dir, char **line, char *word, status *report);
 
 data_image* add_data_image(file_context *src, const char* label, status *report);
@@ -51,7 +48,7 @@ void cleanup(file_context **src);
 void free_global_data_and_symbol();
 void process_data(file_context *src, const char *label, char *line, status *report);
 void process_string(file_context *src, const char *label, char *line, status *report);
-void handle_processing_line(file_context *src, char *line, symbol *sym, status *report);
+void handle_processing_line(file_context *src, char **line, symbol *sym, status *report);
 void process_command(file_context *src,  Command cmd, const char *label, char *line, status *report);
 void handle_no_operands(file_context *src, Command cmd, const char *label, char *line, status *report);
 void handle_one_operand(file_context *src, Command cmd, const char *label, char *line, status *report);

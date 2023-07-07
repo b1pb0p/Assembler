@@ -99,7 +99,7 @@ char* decimal_to_binary12(int decimal) {
  * `length` is greater than the input string length.
  */
 char* truncate_string(const char *input, int length) {
-    unsigned int input_len, truncate_len;
+    unsigned int truncate_len;
     char* truncated = NULL;
 
     if (!input) {
@@ -108,10 +108,9 @@ char* truncate_string(const char *input, int length) {
         return truncated;
     }
 
-    input_len = strlen(input);
-    truncate_len = input_len - length;
+    truncate_len = BINARY_BITS - length;
 
-    if (length >= input_len) {
+    if (length >= BINARY_BITS) {
         handle_error(TERMINATE, "truncate_string()");
         return NULL;
     }
@@ -213,8 +212,10 @@ data_image *assemble_operand_data_img(file_context *src, Concat_mode con_md, Adr
         sym = add_symbol(src, word, INVALID_ADDRESS, &temp_report);
         temp_report = handle_address_reference(data, sym);
     } else if (mode == IMMEDIATE) {
-        data->base64_word = binary12_to_base64(decimal_to_binary12(safe_atoi(word)));
-        temp_report = data->base64_word && (data->is_word_complete = 1) ? NO_ERROR : FAILURE;
+        data->binary_src = decimal_to_binary12(safe_atoi(word));
+        data->binary_a_r_e = decimal_to_binary12(ABSOLUTE);
+        data->concat = ADDRESS; /* Adding the A/R/E bits */
+        temp_report = create_base64_word(data) == NO_ERROR && (data->is_word_complete = 1) ? NO_ERROR : FAILURE;
     } else if (con_md == REG_SRC || con_md == REG_DEST) {
         temp_report = handle_register_data_img(data, con_md, word);
     } else if (con_md == REG_REG) {
@@ -315,9 +316,6 @@ status create_base64_word(data_image *data) {
         return ERR_MEM_ALLOC;
     }
 
-    //if (!data->is_word_complete)
-    //    return NO_ERROR; /* TODO: check ; To not trigger any false alarm, will be handled in the second pass */
-
     if (data->concat == DEFAULT_12BIT)
         report = concat_default_12bit(data, &binary_word);
     else if (data->concat == REG_DEST)
@@ -338,6 +336,7 @@ status create_base64_word(data_image *data) {
         data->base64_word = binary12_to_base64(binary_word);
         if (!data->base64_word)
             report = FAILURE; /* Error message printed via binary12_to_base64() */
+        data->is_word_complete = 1;
     }
 
     free(binary_word);
@@ -408,6 +407,7 @@ status concat_default_12bit(data_image *data, char **binary_word) {
         strcat(*binary_word, a_r_e);
     }
 
+    (*binary_word)[BINARY_BITS] = '\0';
     free_strings(AMT_WORD_4, &src_op, &opcode, &dest_op, &a_r_e);
     return report;
 }
@@ -435,6 +435,7 @@ status concat_reg_dest(data_image *data, char** binary_word) {
         strncpy(*binary_word + REGISTER_BINARY_LEN, dest_op, REGISTER_BINARY_LEN);
     }
 
+    (*binary_word)[BINARY_BITS] = '\0';
     free_strings(AMT_WORD_1, &dest_op);
     return report;
 }
@@ -491,7 +492,7 @@ status concat_reg_reg(data_image *data, char** binary_word) {
         strncpy(*binary_word, src_op, REGISTER_BINARY_LEN);
         strncpy(*binary_word + REGISTER_BINARY_LEN, dest_op, REGISTER_BINARY_LEN);
     }
-
+    (*binary_word)[BINARY_BITS] = '\0';
     free_strings(AMT_WORD_2, &src_op, &dest_op);
     return report;
 }
@@ -508,9 +509,18 @@ status concat_address(data_image *data, char** binary_word) {
     char *src_op = NULL, *a_r_e = NULL;
     status report = NO_ERROR;
 
-    src_op = truncate_string(data->binary_src, ADDRESS_BINARY_LEN);
-    a_r_e = truncate_string(data->binary_a_r_e, A_R_E_BINARY_LEN);
-
+    if (!data->binary_a_r_e || !data->binary_src) {
+        if (data->p_sym->sym_dir == EXTERN) {
+            strcpy(*binary_word, data->p_sym->address_binary);
+            (*binary_word)[BINARY_BITS] = '\0';
+            return NO_ERROR;
+        }
+        src_op = truncate_string(data->p_sym->address_binary, ADDRESS_BINARY_LEN);
+        a_r_e = truncate_string(decimal_to_binary12(RELOCATABLE), A_R_E_BINARY_LEN);
+    } else {
+        src_op = truncate_string(data->binary_src, ADDRESS_BINARY_LEN);
+        a_r_e = truncate_string(data->binary_a_r_e, A_R_E_BINARY_LEN);
+    }
     if (!(src_op && a_r_e)) {
         handle_error(TERMINATE, "concat_address()");
         report = FAILURE;
@@ -521,6 +531,7 @@ status concat_address(data_image *data, char** binary_word) {
         strcat(*binary_word, a_r_e);
     }
 
+    (*binary_word)[BINARY_BITS] = '\0';
     free_strings(AMT_WORD_2, &src_op, &a_r_e);
     return report;
 }
@@ -572,7 +583,7 @@ int is_legal_addressing(file_context *src, Command cmd, Adrs_mod src_op, Adrs_mo
         handle_error(ERR_MISS_OPERAND, src);
         *report = ERR_MISS_OPERAND;
         return 0;
-    } else if (((cmd >= INC || cmd >= NOT && cmd <= CLR) && src_op != INVALID_MD)
+    } else if (((cmd >= INC || (cmd >= NOT && cmd <= CLR)) && src_op != INVALID_MD)
                                         || (cmd >= RTS && dest_op != INVALID_MD)) {
         handle_error(ERR_TOO_MANY_OPERANDS, src);
         *report = ERR_TOO_MANY_OPERANDS;
@@ -600,9 +611,6 @@ void free_symbol(symbol **symbol_t) {
         free((*symbol_t)->label);
     if ((*symbol_t)->address_binary)
         free((*symbol_t)->address_binary);
-    if ((*symbol_t)->data)
-        free_data_image(&(*symbol_t)->data);
-
     free(*symbol_t);
     *symbol_t = NULL;
 }
@@ -617,7 +625,7 @@ void free_symbol_table(symbol ***p_symbol_table, size_t *size) {
     size_t i;
     symbol** symbol_table = NULL;
 
-    if (!p_symbol_table || !(*p_symbol_table))
+    if (!p_symbol_table || !(*p_symbol_table) || !realloc(*p_symbol_table, *size * sizeof (symbol*)))
         return;
 
     symbol_table = *p_symbol_table;
@@ -638,13 +646,15 @@ void free_symbol_table(symbol ***p_symbol_table, size_t *size) {
  */
 void free_data_image(data_image** data) {
     if (data == NULL || *data == NULL) return;
-    if ((*data)->binary_src) free((*data)->binary_src);
+    if (!(*data)->p_sym && (*data)->binary_src) free((*data)->binary_src);
     if ((*data)->binary_opcode) free((*data)->binary_opcode);
     if ((*data)->binary_dest) free((*data)->binary_dest);
     if ((*data)->binary_a_r_e) free((*data)->binary_a_r_e);
     if ((*data)->base64_word) free((*data)->base64_word);
-    if ((*data)->p_sym) free((*data)->p_sym);
-    if ((*data)->value) free((*data)->value);
+    if ((*data)->value) {
+        free((*data)->value);
+        (*data)->value = NULL;
+    }
     free(*data);
     *data = NULL;
 }
@@ -658,7 +668,8 @@ void free_data_image(data_image** data) {
 void free_data_image_array(data_image ***data_array, size_t *size) {
     int i;
 
-    if (!data_array || !*data_array) return;
+    if (!data_array || !*data_array || !realloc(*data_array, (*size * sizeof(data_image*))))
+        return;
 
     for (i = 0; i < *size; i++) {
         free_data_image(&((*data_array)[i]));
