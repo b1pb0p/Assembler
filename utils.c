@@ -80,7 +80,8 @@ file_context* create_file_context(const char* file_name, char* ext, size_t ext_l
 
     fc->file_name = NULL;
     fc->file_ptr = NULL;
-    fc->tc = fc->tc = 0;
+    fc->tc = 0;
+    fc->tc = 0;
 
     copy_n_string(&fc->file_name, file_name_w_ext, len);
     free(file_name_w_ext);
@@ -138,27 +139,27 @@ size_t get_word_length(char **ptr) {
  */
 size_t get_word(char **ptr, char *word, Delimiter delimiter) {
     size_t length = 0;
+    char target_delimiter;
 
     if (!word) return 0;
 
     while (**ptr && isspace((int)**ptr))
         (*ptr)++;
 
-    char targetDelimiter;
     if (delimiter == COMMA)
-        targetDelimiter = ',';
+        target_delimiter = ',';
     else if (delimiter == COLON)
-        targetDelimiter = ':';
+        target_delimiter = ':';
     else
-        targetDelimiter = ' ';
+        target_delimiter = ' ';
 
-    while (**ptr && **ptr != targetDelimiter && !isspace((int)**ptr)) {
+    while (**ptr && **ptr != target_delimiter && !isspace((int)**ptr)) {
         word[length] = **ptr;
         (*ptr)++;
         length++;
     }
 
-    if (delimiter != SPACE && **ptr == targetDelimiter) {
+    if (delimiter != SPACE && **ptr == target_delimiter) {
         word[length] = **ptr;
         (*ptr)++;
         length++;
@@ -248,15 +249,14 @@ size_t is_valid_string(char **line, char **word, status *report) {
     while (**line && isspace(**line))
         (*line)++;
 
+    if (*word) free(*word);
     *word = malloc(sizeof(char) * (length = get_word_length(line)) + 1);
 
-    if (!*word || !get_word(line, *word, COMMA)) {
+    if (!*word || !get_word(line, *word, COMMA)){
         *report = ERR_MEM_ALLOC;
         handle_error(ERR_MEM_ALLOC);
-        return 0;
     }
-
-    return length;
+    return *report == ERR_MEM_ALLOC ? 0 : length;
 }
 
 /**
@@ -358,10 +358,8 @@ Value validate_data(file_context *src, char *word, size_t length, status *report
 Value validate_string(file_context *src, char *word, size_t length, status *report) {
     status temp_report;
     if (*word == '\"') {
-        if (word[length - 1] != '\"') {
+        if (word[length - 1] != '\"')
             *report = ERR_MISSING_QMARK;
-            handle_error(ERR_MISSING_QMARK, src);
-        }
         return isalpha(word[1]) ? STR : INV;
     }
     else {
@@ -393,6 +391,10 @@ status copy_string(char** target, const char* source) {
         return TERMINATE;
     }
 
+    if (!*target) *target = NULL;
+
+    if (!*target) free(*target);
+
     temp = malloc(strlen(source) + 1);
     if (!temp) {
         handle_error(ERR_MEM_ALLOC);
@@ -401,10 +403,6 @@ status copy_string(char** target, const char* source) {
 
     strcpy(temp, source);
     temp[strlen(source)] = '\0';
-
-    if (!*target) *target = NULL;
-
-    if (!*target) free(*target);
 
     *target = temp;
     return NO_ERROR;
@@ -453,7 +451,7 @@ Directive is_directive(const char* src) {
     int i;
     if (src)
         for (i = 0; i < DIRECTIVE_LEN; i++)
-            if (strcmp(src, directives[i]) == 0)
+            if (strncmp(src, directives[i], strlen(directives[i])) == 0)
                 return i + 1; /* Corresponding Directive*/
     return 0;
 }

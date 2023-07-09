@@ -210,7 +210,7 @@ data_image *assemble_operand_data_img(file_context *src, Concat_mode con_md, Adr
         return NULL;
     } else if (mode == DIRECT) {
         sym = add_symbol(src, word, INVALID_ADDRESS, &temp_report);
-        temp_report = handle_address_reference(data, sym);
+        temp_report = sym ? handle_address_reference(data, sym) : TERMINATE;
     } else if (mode == IMMEDIATE) {
         data->binary_src = decimal_to_binary12(safe_atoi(word));
         data->binary_a_r_e = decimal_to_binary12(ABSOLUTE);
@@ -310,6 +310,11 @@ status create_base64_word(data_image *data) {
         return ERR_MEM_ALLOC;
     }
 
+    if (data->base64_word) {
+        free(data->base64_word);
+        data->base64_word = NULL;
+    }
+
     if (!data) {
         handle_error(TERMINATE, "create_base64_word()");
         free(binary_word);
@@ -326,13 +331,15 @@ status create_base64_word(data_image *data) {
         report = concat_reg_reg(data, &binary_word);
     else if (data->concat == ADDRESS)
         report = concat_address(data, &binary_word);
-    else if (data->concat == VALUE)
+    else if (data->concat == VALUE) {
+        free (binary_word);
         report = (binary_word = decimal_to_binary12(*(data->value))) ? NO_ERROR : FAILURE;
+    }
+
     else
         handle_error(TERMINATE, "concatenate_and_convert_to_base64()");
 
-    if (report != FAILURE) {
-        /* Convert binary to base64 */
+    if (report != FAILURE) { /* Convert binary to base64 */
         data->base64_word = binary12_to_base64(binary_word);
         if (!data->base64_word)
             report = FAILURE; /* Error message printed via binary12_to_base64() */
@@ -625,12 +632,10 @@ void free_symbol_table(symbol ***p_symbol_table, size_t *size) {
     size_t i;
     symbol** symbol_table = NULL;
 
-    if (!p_symbol_table || !(*p_symbol_table) || !realloc(*p_symbol_table, *size * sizeof (symbol*)))
+    if (!p_symbol_table || !(*p_symbol_table) || !(symbol_table = realloc(*p_symbol_table, (*size) * sizeof (symbol*))))
         return;
 
-    symbol_table = *p_symbol_table;
-
-    for (i = 0; i < *size; ++i)
+    for (i = 0; i < (*size); ++i)
         if (symbol_table[i])
             free_symbol(&(symbol_table[i]));
 
@@ -646,7 +651,7 @@ void free_symbol_table(symbol ***p_symbol_table, size_t *size) {
  */
 void free_data_image(data_image** data) {
     if (data == NULL || *data == NULL) return;
-    if (!(*data)->p_sym && (*data)->binary_src) free((*data)->binary_src);
+    if (!((*data)->p_sym && (*data)->binary_src)) free((*data)->binary_src);
     if ((*data)->binary_opcode) free((*data)->binary_opcode);
     if ((*data)->binary_dest) free((*data)->binary_dest);
     if ((*data)->binary_a_r_e) free((*data)->binary_a_r_e);
@@ -667,15 +672,15 @@ void free_data_image(data_image** data) {
  */
 void free_data_image_array(data_image ***data_array, size_t *size) {
     int i;
+    data_image **p_data_array = NULL;
 
-    if (!data_array || !*data_array || !realloc(*data_array, (*size * sizeof(data_image*))))
+    if (!data_array || !*data_array || !( p_data_array = realloc(*data_array, (*size * sizeof(data_image*)))))
         return;
 
-    for (i = 0; i < *size; i++) {
-        free_data_image(&((*data_array)[i]));
-    }
+    for (i = 0; i < *size; i++)
+        free_data_image(&p_data_array[i]);
 
-    free(*data_array);
+    free(p_data_array);
     *data_array = NULL;
     *size = 0;
 }

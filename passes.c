@@ -64,7 +64,7 @@ status assembler_first_pass(file_context **src) {
     }
 
 
-    return report;
+    return has_error ? FAILURE : NO_ERROR;
 }
 
 /**
@@ -105,7 +105,7 @@ status process_line(file_context *src, char *p_line) {
     has_directive = word_len && (is_directive(first_word) || (is_directive(first_word + 1)));
     has_command = word_len && (is_command(first_word)) != INV_CMD;
 
-    if (!has_directive && !has_command && (sym = declare_label(src, first_word, word_len, &report))
+    if (!has_directive && !has_command && (word_len && (sym = declare_label(src, first_word, word_len, &report)))
         && report != ERR_MEM_ALLOC) /* Label declaration following a Directive or a Command */
         handle_processing_line(src, &p_line, sym, &report);
     else if (report != ERR_MEM_ALLOC) /* Process line without any associated label */
@@ -376,12 +376,13 @@ void handle_one_operand(file_context *src, Command cmd, const char *label, char 
     size_t word_len;
     Concat_mode concat = ILLEGAL_CONCAT;
 
-    word = malloc(sizeof(char) * get_word_length(&line));
+    word = malloc(sizeof(char) * get_word_length(&line) + 1);
     word_len = get_word(&line, word, COMMA);
 
     if (!word_len || !word) {
         *report = *report == ERR_MEM_ALLOC ? ERR_MEM_ALLOC : ERR_MISS_OPERAND;
         handle_error(ERR_MISS_OPERAND, src);
+        if (word) free(word);
         return;
     } else if (get_word_length(&line)) {
         *report = ERR_EXTRA_TEXT;
@@ -405,10 +406,12 @@ void handle_one_operand(file_context *src, Command cmd, const char *label, char 
     if (!p_data_word || !p_data_op || temp_report != NO_ERROR ) {
         if (p_data_word) free_data_image(&p_data_word);
         if (p_data_op) free_data_image(&p_data_op);
-        if (word) free(word);
+        free(word);
         *report = ERR_MEM_ALLOC;
         return;
     }
+
+    free(word);
     p_data_word->is_word_complete = 1;
     IC += 2;
 }
@@ -460,7 +463,7 @@ void handle_two_operands(file_context *src, Command cmd, const char *label, char
 
     if (!is_legal_addressing(src, cmd, op_mode, sec_op_mode, report) ||
             get_concat_mode(op_mode, sec_op_mode, &concat_1, &concat_2) != NO_ERROR) {
-        free(word);
+        if (word) free(word);
         if (next_word) free(next_word);
         return;
     }
@@ -477,11 +480,16 @@ void handle_two_operands(file_context *src, Command cmd, const char *label, char
 
     if (!p_data_word || (!p_data_op || (concat_1 != REG_REG && !p_data_sec_op)) ||
         secondary_temp != NO_ERROR || temp_report != NO_ERROR) {
-        free(word);
+        if (word) free(word);
+        if (next_word) free(next_word);
         *report = ERR_MEM_ALLOC;
         return;
     }
+
     p_data_word->is_word_complete = 1;
+    if (word) free(word);
+    if (next_word) free(next_word);
+
     if (concat_1 == REG_REG) {
         p_data_op->is_word_complete = 1;
         IC += 2;
@@ -490,7 +498,6 @@ void handle_two_operands(file_context *src, Command cmd, const char *label, char
     if (op_mode == IMMEDIATE || op_mode == REGISTER) p_data_op-> is_word_complete = 1;
     if (sec_op_mode == IMMEDIATE || sec_op_mode == REGISTER) p_data_sec_op-> is_word_complete = 1;
 
-    if (word) free(word);
     IC += 3; /* Instruction + 2 operands words */
 }
 
@@ -567,6 +574,7 @@ status string_parser(file_context *src, char **word, char *ch, status *report) {
             (*word)++;
             *ch = '\0';
             *report = (**word != '\0' && **word != '\n') ? ERR_EXTRA_TEXT : *report;
+            if (*report == ERR_EXTRA_TEXT) handle_error(ERR_EXTRA_TEXT, src);
             ret_val = NO_ERROR;
             reached_end = 1;
         }
@@ -574,7 +582,6 @@ status string_parser(file_context *src, char **word, char *ch, status *report) {
     else {
        if ((*word)[1] == '\0' || (*word)[1] == '\n') {
             is_first_qmark = 0;
-            ret_val = NO_ERROR;
             reached_end = 1;
             *report = ERR_MISSING_QMARK;
             handle_error(ERR_MISSING_QMARK, src);
@@ -639,10 +646,10 @@ status update_symbol_info(symbol *sym, int address) {
  * @return A pointer to the added symbol if it is new or has missing information, or NULL if the symbol already exists with complete information.
  *         Returns NULL in case of memory allocation errors during symbol creation or table expansion.
  */
-symbol* add_symbol(file_context *src, const char* label, int address, status *report) {
-    symbol** new_symbol_table = NULL;
-    symbol* new_symbol = NULL;
-    symbol* existing_symbol = NULL;
+symbol *add_symbol(file_context *src, const char *label, int address, status *report) {
+    symbol **new_symbol_table = NULL;
+    symbol *new_symbol = NULL;
+    symbol *existing_symbol = NULL;
     status temp_report;
     existing_symbol = find_symbol(label);
 
@@ -667,16 +674,18 @@ symbol* add_symbol(file_context *src, const char* label, int address, status *re
         new_symbol_table = realloc(symbol_table, (symbol_count + 1) * sizeof(symbol*));
         new_symbol = malloc(sizeof(symbol));
 
+        new_symbol->label = NULL;
         if (!label || !new_symbol_table || !new_symbol || copy_string(&(new_symbol->label), label) != NO_ERROR)    {
             handle_error(ERR_MEM_ALLOC);
-            free_symbol(&new_symbol);
-            free_symbol_table(&symbol_table, &symbol_count);
+            if (new_symbol) free_symbol(&new_symbol);
+            if (new_symbol_table) free_symbol_table(&symbol_table, &symbol_count);
             *report = ERR_MEM_ALLOC;
             return NULL;
         }
         if (address == INVALID_ADDRESS) {
             new_symbol->is_missing_info = 1;
             new_symbol->address_decimal = address;
+            new_symbol->address_binary = NULL;
         }
         else {
             new_symbol->address_decimal = address;
@@ -687,7 +696,6 @@ symbol* add_symbol(file_context *src, const char* label, int address, status *re
         new_symbol->lc = src->lc;
         new_symbol->sym_dir = DEFAULT;
         new_symbol->data = NULL;
-        new_symbol->address_binary = NULL;
         symbol_table = new_symbol_table;
         symbol_table[symbol_count++] = new_symbol;
 
@@ -729,8 +737,8 @@ data_image* add_data_image(file_context *src, const char* label, status *report)
 
 symbol* declare_label(file_context *src, char *label, size_t label_len, status *report) {
     symbol *sym = NULL;
-    if (!strncpy(label, label, label_len - 1)) {
-        handle_error(ERR_MEM_ALLOC);
+    if (!label_len) {
+        handle_error(TERMINATE, "declare_label()");
         return NULL;
     }
 
@@ -874,7 +882,7 @@ status write_data_img_to_stream(file_context *src, FILE *dest) {
         }
     }
 
-    fprintf(dest, "%lu\t%lu", (unsigned long)DC, (unsigned long)IC);
+    fprintf(dest, "%lu\t%lu", (unsigned long)IC, (unsigned long)DC);
 
     for (i = 0; i < data_arr_obj_index && !error_flag; i++) {
         if (!data_img_obj[i]->is_word_complete)
@@ -885,6 +893,8 @@ status write_data_img_to_stream(file_context *src, FILE *dest) {
             break;
         }
         fprintf(dest, "\n%s", data_img_obj[i]->base64_word);
+        free(data_img_obj[i]->base64_word);
+        data_img_obj[i]->base64_word = NULL;
     }
     return error_flag ? TERMINATE : NO_ERROR;
 }
@@ -947,11 +957,14 @@ status write_extern_to_stream(file_context *src, FILE *dest) {
         runner = data_img_obj[i];
         if (runner && runner->p_sym && runner->p_sym->sym_dir == EXTERN) {
             has_extern = 1;
+            if (runner->p_sym->address_binary) free (runner->p_sym->address_binary);
+
             runner->p_sym->address_binary = decimal_to_binary12(EXTERNAL);
             if (!runner->p_sym->address_binary || !(runner->value = malloc(sizeof (int)))) {
                 handle_error(ERR_MEM_ALLOC);
                 return ERR_MEM_ALLOC;
             }
+
             runner->p_sym->is_missing_info = 0;
             runner->p_sym->address_decimal = 0;
             *(runner->value) = 0;
