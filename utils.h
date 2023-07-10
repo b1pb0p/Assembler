@@ -94,7 +94,6 @@ typedef struct {
 char *strdup(const char *s);
 
 int safe_atoi(const char *str);
-int is_label(file_context *src, const char *label, status *report);
 int is_valid_register(file_context *src, const char* str, status *report);
 
 void free_file_context(file_context** context);

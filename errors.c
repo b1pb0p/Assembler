@@ -41,11 +41,12 @@ const char *msg[MSG_LEN] = {
         "%s - Unused extern label (%s) on line %d.",
         "%s - Invalid macro name (%s) on line %d.",
         "%s - Label (%s) cannot start with a digit on line %d",
+        "%s - Missing symbol name in .%s directive. one line %d",
         "%s - Label (%s) cannot act as both entry and extern on line %d",
         "%s - Label (%s) is being declared/used in a forbidden context on line %d",
         "%s - Invalid label name (%s) on line %d.",
         "%s - Label (%s) does not exist on line %d.",
-        "%s - Label (%s) defined at the beginning of an %s line is meaningless and will be ignored. on line %d.",
+        "%s - Meaningless label (%s) at the beginning of a %s line. It will be ignored. on line %d.",
         "%s - Invalid %s call (%s) on line %d.",
         "%s - Invalid %s (%s) contains illegal characters on line %d",
         "%s - Duplicate %s declaration (%s) on line %d.",
@@ -156,7 +157,7 @@ void handle_progress(status code, ...) {
 
     va_start(args, code);
     if (code == NO_ERROR)
-        printf("%s", msg[code], va_arg(args, char*));
+        printf(msg[code], va_arg(args, char*));
     else {
         if (code <= OPEN_FILE) {
             fc = va_arg(args, file_context*);

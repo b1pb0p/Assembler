@@ -26,8 +26,8 @@ status concat_address(data_image *data, char** binary_word);
  * Converts a decimal number to a binary string representation.
  *
  * @param decimal The decimal number to be converted to binary.
- *
- * @return A dynamically allocated binary string representation of the decimal number, or NULL if memory allocation fails.
+ * @return A dynamically allocated binary string representation of the decimal number,
+ * or NULL if memory allocation fails.
  */
 char* decimal_to_binary12(int decimal) {
     int i, carry;
@@ -94,9 +94,8 @@ char* decimal_to_binary12(int decimal) {
  *
  * @param input  The input string to be truncated.
  * @param length The desired length of the truncated string.
- *
- * @return A dynamically allocated truncated string, or NULL if an error occurs or,
- * `length` is greater than the input string length.
+ * @return A dynamically allocated truncated string,
+ * or NULL if an error occurs or `length` is greater than the input string length.
  */
 char* truncate_string(const char *input, int length) {
     unsigned int truncate_len;
@@ -128,12 +127,9 @@ char* truncate_string(const char *input, int length) {
 }
 
 /**
- * Converts a 12 bits binary string to a Base64 string.
- *
- * Processes the input binary string and converts it to a Base64 string representation.
+ * Converts a 12-bit binary string to a Base64 string.
  *
  * @param binary The input binary string to be converted.
- *
  * @return A Base64 string representation of the input.
  *         Returns NULL if an error occurs.
  */
@@ -199,6 +195,16 @@ status process_data_img_dec(data_image *data, Adrs_mod src_op, Command opcode, A
     return NO_ERROR;
 }
 
+/**
+ * Assembles an operand into a data_image structure based on the addressing mode and concatenation mode.
+ *
+ * @param src The source file context.
+ * @param con_md The concatenation mode.
+ * @param mode The addressing mode.
+ * @param word The operand word to assemble.
+ * @param ... Additional operands (only used for REG_REG concatenation mode).
+ * @return A pointer to the assembled data_image structure, or NULL if an error occurs.
+ */
 data_image *assemble_operand_data_img(file_context *src, Concat_mode con_md, Adrs_mod mode, char* word, ...) {
     va_list args;
     symbol *sym = NULL;
@@ -229,6 +235,15 @@ data_image *assemble_operand_data_img(file_context *src, Concat_mode con_md, Adr
     return temp_report == NO_ERROR ? data : NULL;
 }
 
+/**
+ * Handles the assembly of register operands into a data_image structure.
+ *
+ * @param data The data_image structure to assemble the register operands into.
+ * @param con_act The concatenation action (REG_SRC, REG_DEST, or REG_REG).
+ * @param reg The register operand.
+ * @param ... Additional register operands (only used for REG_REG concatenation action).
+ * @return The status of the assembly process. Returns NO_ERROR if successful, or FAILURE if an error occurs.
+ */
 status handle_register_data_img(data_image *data, Concat_mode con_act, char *reg, ...) {
     va_list args;
     char *sec_reg = NULL;
@@ -251,6 +266,13 @@ status handle_register_data_img(data_image *data, Concat_mode con_act, char *reg
     return create_base64_word(data) == NO_ERROR && (data->is_word_complete = 1) ? NO_ERROR : FAILURE;
 }
 
+/**
+ * Handles the assembly of address reference operands into a data_image structure.
+ *
+ * @param data The data_image structure to assemble the address reference operand into.
+ * @param sym The symbol representing the address reference.
+ * @return The status of the assembly process. Returns NO_ERROR if successful, or FAILURE if an error occurs.
+ */
 status handle_address_reference(data_image *data,  symbol *sym) {
     if (!data || !sym) {
         handle_error(TERMINATE, "handle_address_reference()");
@@ -266,6 +288,15 @@ status handle_address_reference(data_image *data,  symbol *sym) {
     return NO_ERROR;
 }
 
+/**
+ * Determines the concatenation mode based on the addressing modes of the source and destination operands.
+ *
+ * @param src_op The addressing mode of the source operand.
+ * @param dest_op The addressing mode of the destination operand.
+ * @param cn1 Pointer to store the first concatenation mode.
+ * @param cn2 Pointer to store the second concatenation mode.
+ * @return The status of the concatenation mode determination. Returns NO_ERROR if successful, or FAILURE if an error occurs.
+ */
 status get_concat_mode(Adrs_mod src_op, Adrs_mod dest_op, Concat_mode *cn1, Concat_mode *cn2) {
     if (src_op && dest_op) {
         if (src_op == REGISTER && dest_op == REGISTER)
@@ -278,6 +309,13 @@ status get_concat_mode(Adrs_mod src_op, Adrs_mod dest_op, Concat_mode *cn1, Conc
     return (*cn1 == -1 || *cn2 == -1) ? FAILURE : NO_ERROR;
 }
 
+/**
+ * Determines the concatenation mode based on a single addressing mode.
+ *
+ * @param src_op The addressing mode.
+ * @param dest_op The addressing mode.
+ * @return The determined concatenation mode.
+ */
 Concat_mode get_concat_mode_one_op(Adrs_mod src_op, Adrs_mod dest_op) {
     if ((src_op == IMMEDIATE && dest_op == INVALID_MD) || (src_op == INVALID_MD && dest_op == IMMEDIATE))
         return VALUE;
@@ -292,7 +330,6 @@ Concat_mode get_concat_mode_one_op(Adrs_mod src_op, Adrs_mod dest_op) {
         return ILLEGAL_CONCAT;
     }
 }
-
 
 /**
  * Creates the base64 word for a data_image structure by concatenating the binary components
@@ -382,6 +419,12 @@ data_image* create_data_image(int lc, int *address) {
     return p_ret;
 }
 
+/**
+ * Gets the A/R/E (Absolute/Relocation/External) bits for a given symbol.
+ *
+ * @param sym The symbol to retrieve the A/R/E bits from.
+ * @return The A/R/E bits of the symbol.
+ */
 ARE get_are(symbol *sym) {
     return sym->sym_dir == EXTERN ? EXTERNAL : RELOCATABLE;
 }
@@ -548,11 +591,10 @@ status concat_address(data_image *data, char** binary_word) {
  *
  * @param src The source file context.
  * @param word The input source string to analyze.
- * @param val_type A pointer to the Value variable to store the type of the input source string.
  * @param word_len The length of the input source string.
  * @param report A pointer to the status report.
  * @return The addressing mode determined based on the source string.
- *         Possible return values are: REGISTER, IMMEDIATE, DIRECT and INVALID_MD.
+ *         Possible return values are: REGISTER, IMMEDIATE, DIRECT, and INVALID_MD.
  */
 Adrs_mod get_addressing_mode(file_context *src, char *word, size_t word_len, status *report) {
     Value val_type;
@@ -603,7 +645,6 @@ int is_legal_addressing(file_context *src, Command cmd, Adrs_mod src_op, Adrs_mo
     }
     return 1;
 }
-
 
 /**
  * Frees the memory allocated for a Symbol structure, including its members.
@@ -710,4 +751,3 @@ void free_strings(int num_strings, ...) {
 
     va_end(args);
 }
-

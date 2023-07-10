@@ -383,9 +383,6 @@ status write_to_file(file_context *src, file_context *dest, char *line, int foun
     return NO_ERROR;
 }
 
-
-
-
 /**
 * Adds a new macro with the given name and body to the global linked list of macros.
 *
@@ -447,7 +444,6 @@ macro_node* is_macro_exists(char* name) {
     return NULL; /* no matching macro found */
 }
 
-
 /**
  * Frees the memory allocated for the linked list of macros,
  * including the memory allocated for macro names and bodies.
@@ -468,5 +464,3 @@ void free_macros() {
     macro_head = NULL;
     macro_tail = NULL;
 }
-
-

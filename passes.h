@@ -23,6 +23,7 @@
 #define AMT_WORD_2 2
 #define AMT_WORD_1 1
 #define ADDRESS_START 100
+#define MAX_MEMORY_SIZE 1024
 
 status assembler_first_pass(file_context **src);
 status assembler_second_pass(file_context **src);

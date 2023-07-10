@@ -42,6 +42,7 @@ const char *commands[COMMANDS_LEN] = {
  *
  * @param file_name The name of the file.
  * @param ext The extension to append to the file name.
+ * @param ext_len The length of the extension.
  * @param mode The file mode for opening the file (e.g., "r" for read, "w" for write).
  * @param report Pointer to the status report variable.
  * @return A pointer to the created file context object if successful, NULL otherwise.
@@ -300,26 +301,15 @@ status is_valid_label(const char *label) {
     return ERR_MISSING_COLON;
 }
 
-int is_label(file_context *src, const char *label, status *report) {
-    status ret_val = is_valid_label(label);
-
-    if (!report)  /* Do not print error messages if report is NULL */
-        return ret_val == ERR_INVALID_LABEL ? 0 : 1;
-    if (ret_val == NO_ERROR)
-        return 1;
-
-    *report = ret_val;
-
-    if (ret_val == ERR_INVALID_LABEL) {
-        handle_error(ERR_INVALID_LABEL, src, label);
-        return 0;
-    }
-
-    ret_val == ERR_MISSING_COLON ? handle_error(ret_val, src) : ret_val == ERR_ILLEGAL_CHARS ?
-                                                                handle_error(ret_val, src, "Label",label) : handle_error(ret_val, src, label);
-    return 1;
-}
-
+/**
+ * Validates if the given string is a valid data value.
+ *
+ * @param src Pointer to the file context.
+ * @param word The string to validate as a data value.
+ * @param length The length of the word.
+ * @param report Pointer to the status report.
+ * @return The type of the data value (LBL, NUM, STR, or INV) if valid, or INV if invalid.
+ */
 Value validate_data(file_context *src, char *word, size_t length, status *report) {
     char *p_word = NULL;
     status temp_report;
@@ -344,7 +334,7 @@ Value validate_data(file_context *src, char *word, size_t length, status *report
         p_word = word;
         while (!isspace(*p_word) && *p_word != '\0' && *p_word != '\n') {
             if (!isdigit(*p_word)) {
-                handle_error(ERR_INVALID_SYNTAX, src);
+                handle_error(ERR_INVALID_SYNTAX, src, "label", p_word);
                 *report = ERR_INVALID_SYNTAX;
                 return INV;
             }
@@ -355,6 +345,15 @@ Value validate_data(file_context *src, char *word, size_t length, status *report
     return INV;
 }
 
+/**
+ * Validates if the given string is a valid string value.
+ *
+ * @param src Pointer to the file context.
+ * @param word The string to validate as a string value.
+ * @param length The length of the word.
+ * @param report Pointer to the status report.
+ * @return The type of the string value (LBL, STR, or INV) if valid, or INV if invalid.
+ */
 Value validate_string(file_context *src, char *word, size_t length, status *report) {
     status temp_report;
     if (*word == '\"') {

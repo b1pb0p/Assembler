@@ -1,6 +1,8 @@
 /* first_pass.c
- * Assembler's first pass process.
- * @author Bar Toplian - 323869065- bar.toplian@gmail.com
+ * Assembler's first and second passes process.
+ * Author: Bar Toplian
+ * ID: 323869065
+ * Email: bar.toplian@gmail.com
  */
 
 #include <stdio.h>
@@ -33,6 +35,12 @@ int DC = 0;
 int IC = 0;
 int next_free_address = ADDRESS_START;
 
+/**
+ * Perform the first pass of the assembler, processing each line and generating symbol table entries.
+ *
+ * @param src Pointer to the file context for the input file information.
+ * @return The status of the operation (NO_ERROR or FAILURE).
+ */
 status assembler_first_pass(file_context **src) {
     char line[MAX_BUFFER_LENGTH];
     file_context *p_src = NULL;
@@ -60,11 +68,13 @@ status assembler_first_pass(file_context **src) {
     }
     else {  /* Cleanup output files if an error occurred */
         handle_error(ERR_FIRST_PASS, (*src)->fc, (*src)->tc, (*src)->file_name_wout_ext);
+        fclose(p_src->file_ptr);
+        p_src->file_ptr = NULL;
+        remove(p_src->file_name);
         cleanup(src);
     }
 
-
-    return has_error ? FAILURE : NO_ERROR;
+    return has_error ? FAILURE : report;
 }
 
 /**
@@ -92,6 +102,13 @@ status assembler_second_pass(file_context **src) {
     return report;
 }
 
+/**
+ * Process a line of assembly code, identifying directives, commands, and labels.
+ *
+ * @param src Pointer to the file context for the input file information.
+ * @param p_line The line of code to process.
+ * @return The status of the line processing (NO_ERROR or an error status).
+ */
 status process_line(file_context *src, char *p_line) {
     char first_word[MAX_LABEL_LENGTH];
     char *p_ch = NULL;
@@ -101,13 +118,15 @@ status process_line(file_context *src, char *p_line) {
     size_t word_len;
 
     p_ch = p_line;
-    word_len = get_word(&p_line, first_word, SPACE);
+    word_len = get_word(&p_line, first_word, COLON);
     has_directive = word_len && (is_directive(first_word) || (is_directive(first_word + 1)));
     has_command = word_len && (is_command(first_word)) != INV_CMD;
 
     if (!has_directive && !has_command && (word_len && (sym = declare_label(src, first_word, word_len, &report)))
         && report != ERR_MEM_ALLOC) /* Label declaration following a Directive or a Command */
         handle_processing_line(src, &p_line, sym, &report);
+    else if (!has_directive && !has_command)  /* Faulty label declaration */
+        return report;
     else if (report != ERR_MEM_ALLOC) /* Process line without any associated label */
         handle_processing_line(src, &p_ch, NULL, &report);
     else {
@@ -117,6 +136,14 @@ status process_line(file_context *src, char *p_line) {
     return report;
 }
 
+/**
+ * Handle the processing of a line, including labels, directives, and commands.
+ *
+ * @param src Pointer to the file context for the input file information.
+ * @param line The line to process.
+ * @param sym The symbol associated with the line (optional - NULL).
+ * @param report Pointer to the status variable to store error reports.
+ */
 void handle_processing_line(file_context *src, char **line, symbol *sym, status *report) {
     char next_word[MAX_LABEL_LENGTH];
     char *p_label = NULL;
@@ -205,6 +232,14 @@ void process_data(file_context *src, const char *label, char *line, status *repo
         handle_error(ERR_INVALID_SYNTAX, src, "data", "[End Of Line]");
 }
 
+/**
+ * Processes .string information from a given file context, label, and line.
+ *
+ * @param src The file_context pointer.
+ * @param label The label associated with the string (optional - NULL).
+ * @param line The line containing the string.
+ * @param report Pointer to the status variable to store error reports.
+ */
 void process_string(file_context *src, const char *label, char *line, status *report) {
     char p_ch, *word = NULL, *p_word = NULL;
     int is_first_char, is_first_value = 0, *value = NULL;
@@ -268,9 +303,22 @@ void process_string(file_context *src, const char *label, char *line, status *re
     FREE_AND_NULL(p_word);
 }
 
+/**
+ * process_directive - Process a directive
+ *
+ * Processes a directive by adding symbols to the symbol table and performing error handling.
+ * It handles directives with multiple operands and checks for duplicate or invalid directives.
+ *
+ * @param src - Pointer to the source file context.
+ * @param dir - The directive being processed.
+ * @param label - The label associated with the directive (optional - can be NULL).
+ * @param line - The line containing the directive.
+ * @param report - A pointer to the status report.
+ */
 void process_directive(file_context *src, Directive dir, const char *label, char *line, status *report) {
     char word[MAX_LABEL_LENGTH];
     symbol *sym = NULL;
+    int has_extern = 0;
 
     if (label)
         handle_error(WARN_MEANINGLESS_LABEL, src, label, dir);
@@ -278,6 +326,7 @@ void process_directive(file_context *src, Directive dir, const char *label, char
     while (*line != '\n' && *line != '\0' && get_word(&line,word,COMMA) != 0) {
         (void) line_parser(src, dir, &line, word, report);
         sym = add_symbol(src, word, INVALID_ADDRESS, report);
+        has_extern = 1; /* flag for non-empty extern command */
 
         if (!sym)
             continue;
@@ -299,10 +348,25 @@ void process_directive(file_context *src, Directive dir, const char *label, char
 
         sym->sym_dir = dir;
         if (sym->data) sym->data->directive = dir;
-
+    }
+    if (!has_extern) {
+        handle_error(ERR_MISSING_LABEL, src, dir == ENTRY ? "entry" : "extern");
+        *report = ERR_MISSING_LABEL;
     }
 }
 
+/**
+ * process_command - Process a command
+ *
+ * Processes a command by calling specific handler functions based on the type of command.
+ * It handles commands with no operands, one operand, or two operands.
+ *
+ * @param src - Pointer to the source file context.
+ * @param cmd - The command being processed.
+ * @param label - The label associated with the command (optional - can be NULL).
+ * @param line - The line containing the command.
+ * @param report - A pointer to the status report.
+ */
 void process_command(file_context *src,  Command cmd, const char *label, char *line, status *report) {
     status temp_report = NO_ERROR;
 
@@ -321,13 +385,16 @@ void process_command(file_context *src,  Command cmd, const char *label, char *l
 }
 
 /**
- * Handles command processing for commands that take no operands (e.g., rts, stop).
+ * handle_no_operands - Handle commands with no operands
  *
- * @param src The source file context.
- * @param cmd The command being processed.
- * @param label The label associated with the data (optional - NULL).
- * @param line The line containing the command.
- * @param report A pointer to the status report.
+ * Handles commands that take no operands, such as `rts` and `stop`.
+ * It adds data images to the source file context and updates symbol information.
+ *
+ * @param src - Pointer to the source file context.
+ * @param cmd - The command being processed.
+ * @param label - The label associated with the data (optional - can be NULL).
+ * @param line - The line containing the command.
+ * @param report - A pointer to the status report.
  */
 void handle_no_operands(file_context *src, Command cmd, const char *label, char *line, status *report) {
     status temp_report;
@@ -358,14 +425,16 @@ void handle_no_operands(file_context *src, Command cmd, const char *label, char 
 }
 
 /**
- * Handles command processing for commands that take one operand (source operand).
- * This function is responsible for processing commands such as not, clr, inc, dec, jmp, bne, red, prn, and jsr.
+ * handle_one_operand - Handle commands with one operand
  *
- * @param src The source file context.
- * @param cmd The command being processed.
- * @param label The label associated with the data (optional - NULL).
- * @param line The line containing the command.
- * @param report A pointer to the status report.
+ * Handles commands that take one operand, such as `not`, `clr`, and `jmp`.
+ * It processes the operand, assembles the data image, and updates symbol information.
+ *
+ * @param src - Pointer to the source file context.
+ * @param cmd - The command being processed.
+ * @param label - The label associated with the data (optional - can be NULL).
+ * @param line - The line containing the command.
+ * @param report - A pointer to the status report.
  */
 void handle_one_operand(file_context *src, Command cmd, const char *label, char *line, status *report) {
     char *word = NULL;
@@ -374,7 +443,7 @@ void handle_one_operand(file_context *src, Command cmd, const char *label, char 
     Adrs_mod op_mode;
     status temp_report;
     size_t word_len;
-    Concat_mode concat = ILLEGAL_CONCAT;
+    Concat_mode concat;
 
     word = malloc(sizeof(char) * get_word_length(&line) + 1);
     word_len = get_word(&line, word, COMMA);
@@ -417,16 +486,16 @@ void handle_one_operand(file_context *src, Command cmd, const char *label, char 
 }
 
 /**
- * Handles the processing of commands with two operands.
+ * handle_two_operands - Handle commands with two operands
  *
- * This function processes a command with two operands, assembling the data image
- * and performing necessary error handling.
+ * Handles commands that take two operands, such as `mov`, `add`, and `sub`.
+ * It assembles the data image for both operands and performs necessary error handling.
  *
- * @param src The file context.
- * @param cmd The command.
- * @param label The label associated with the command.
- * @param line The input line.
- * @param report Pointer to the status report.
+ * @param src - Pointer to the source file context.
+ * @param cmd - The command being processed.
+ * @param label - The label associated with the data (optional - can be NULL).
+ * @param line - The line containing the command.
+ * @param report - A pointer to the status report.
  */
 void handle_two_operands(file_context *src, Command cmd, const char *label, char *line, status *report) {
     char *word = NULL;
@@ -435,7 +504,7 @@ void handle_two_operands(file_context *src, Command cmd, const char *label, char
     data_image *p_data_op = NULL;
     data_image *p_data_sec_op = NULL;
     Adrs_mod op_mode, sec_op_mode;
-    status temp_report = NO_ERROR, secondary_temp = NO_ERROR;
+    status temp_report = NO_ERROR, secondary_temp;
     Concat_mode concat_1 = ILLEGAL_CONCAT, concat_2 = ILLEGAL_CONCAT;
     size_t word_len, word_len_sec;
 
@@ -501,7 +570,19 @@ void handle_two_operands(file_context *src, Command cmd, const char *label, char
     IC += 3; /* Instruction + 2 operands words */
 }
 
-
+/**
+ * line_parser - Parse a line and extract a word
+ *
+ * Parses a line and extracts a word based on the specified delimiter.
+ * It also handles the removal of commas and checks for extra text or missing comma errors.
+ *
+ * @param src - Pointer to the source file context.
+ * @param dir - The directive being processed.
+ * @param line - A pointer to the line string.
+ * @param word - A pointer to store the extracted word.
+ * @param report - A pointer to the status report.
+ * @return The value indicating the type of the parsed word (LBL, INV, etc.).
+ */
 Value line_parser(file_context *src, Directive dir, char **line, char *word, status *report) {
     size_t length;
 
@@ -554,6 +635,20 @@ Value line_parser(file_context *src, Directive dir, char **line, char *word, sta
         return LBL;
 }
 
+/**
+ * string_parser - Parse a string and extract characters
+ *
+ * Parses a string and extracts characters one by one.
+ * It handles the opening and closing quotation marks of the string and reports any errors.
+ *
+ * @param src - Pointer to the source file context.
+ * @param word - A pointer to the string being parsed.
+ * @param ch - A pointer to store the extracted character.
+ * @param report - A pointer to the status report.
+ * @return The status of the parsing operation.
+ *         Returns TERMINATE if the end of the string is reached,
+ *         or NO_ERROR if the parsing is successful.
+ */
 status string_parser(file_context *src, char **word, char *ch, status *report) {
     static int is_first_qmark = 0;
     static status reached_end = 0;
@@ -674,7 +769,7 @@ symbol *add_symbol(file_context *src, const char *label, int address, status *re
         new_symbol_table = realloc(symbol_table, (symbol_count + 1) * sizeof(symbol*));
         new_symbol = malloc(sizeof(symbol));
 
-        new_symbol->label = NULL;
+        if (new_symbol) new_symbol->label = NULL;
         if (!label || !new_symbol_table || !new_symbol || copy_string(&(new_symbol->label), label) != NO_ERROR)    {
             handle_error(ERR_MEM_ALLOC);
             if (new_symbol) free_symbol(&new_symbol);
@@ -703,11 +798,28 @@ symbol *add_symbol(file_context *src, const char *label, int address, status *re
     }
 }
 
+/**
+ * Adds a data image entry to the data image array.
+ *
+ * Adds a new data image entry to the data image array based on the provided
+ * source and label information. Updates the report status accordingly.
+ *
+ * @param src The source file_context pointer.
+ * @param label The label associated with the data image entry (optional).
+ * @param report Pointer to the status report variable.
+ * @return Pointer to the newly added data image entry, or NULL if an error occurred.
+ */
 data_image* add_data_image(file_context *src, const char* label, status *report) {
     static size_t data_obj_cap = 0;
     size_t new_cap = data_obj_cap + DEFAULT_DATA_IMAGE_CAP;
     data_image **data_arr = NULL;
     data_image *new_image = create_data_image(src->lc, &next_free_address);
+
+    if (next_free_address == MAX_MEMORY_SIZE) {
+        handle_error(TERMINATE, "The input file requires too much memory.");
+        *report = TERMINATE;
+        return NULL;
+    }
 
     if (!new_image || (data_obj_cap <= data_arr_obj_index &&
                        !(data_arr = realloc(data_img_obj, (new_cap) * sizeof(data_image *))))) {
@@ -735,6 +847,18 @@ data_image* add_data_image(file_context *src, const char* label, status *report)
     return new_image;
 }
 
+/**
+ * Declares a label symbol and adds it to the symbol table.
+ *
+ * Declares a label symbol based on the provided source, label, and label length.
+ * Updates the report status accordingly.
+ *
+ * @param src The source file_context pointer.
+ * @param label The label to declare.
+ * @param label_len The length of the label.
+ * @param report Pointer to the status report variable.
+ * @return Pointer to the declared label symbol, or NULL if an error occurred.
+ */
 symbol* declare_label(file_context *src, char *label, size_t label_len, status *report) {
     symbol *sym = NULL;
     if (!label_len) {
@@ -742,11 +866,15 @@ symbol* declare_label(file_context *src, char *label, size_t label_len, status *
         return NULL;
     }
 
-    if (!is_label(src, label, report))
+    if (is_valid_label(label) == ERR_INVALID_LABEL)
         return NULL;
 
     if (label[label_len - 1] == ':')
         label[label_len - 1] = '\0';
+    else {
+        *report = ERR_MISSING_COLON;
+        handle_error(ERR_MISSING_COLON, src);
+    }
 
     sym = add_symbol(src, label, next_free_address, report);
     next_free_address = sym ? next_free_address + 1 : next_free_address;
@@ -754,6 +882,19 @@ symbol* declare_label(file_context *src, char *label, size_t label_len, status *
     return sym;
 }
 
+/**
+ * Asserts the data image entry by label and handles associated resources.
+ *
+ * Asserts the data image entry based on the provided label and updates the flag,
+ * value, data image, and report status accordingly.
+ *
+ * @param src The source file_context pointer.
+ * @param label The label associated with the data image entry (optional).
+ * @param flag Pointer to the flag variable.
+ * @param value Pointer to the value variable.
+ * @param p_data Pointer to the data image pointer.
+ * @param report Pointer to the status report variable.
+ */
 void assert_data_img_by_label(file_context *src, const char *label, int *flag,
                               int **value, data_image **p_data, status *report) {
     if (label && !*flag) {
@@ -774,6 +915,21 @@ void assert_data_img_by_label(file_context *src, const char *label, int *flag,
     }
 }
 
+/**
+ * Asserts a value to the data image and handles associated resources.
+ *
+ * Asserts a value to the data image based on the provided directive, value type,
+ * word, and updates the value, data image, and report status accordingly.
+ *
+ * @param src The source file_context pointer.
+ * @param dir The directive type.
+ * @param val_type The value type.
+ * @param word The word value.
+ * @param value Pointer to the value variable.
+ * @param p_data Pointer to the data image pointer.
+ * @param report Pointer to the status report variable.
+ * @return The status of the assertion: NO_ERROR on success, FAILURE or TERMINATE if an error occurred.
+ */
 status assert_value_to_data(file_context *src, Directive dir, Value val_type ,
                             char *word, int **value, data_image **p_data, status *report) {
     symbol *sym = NULL;
@@ -810,15 +966,15 @@ status assert_value_to_data(file_context *src, Directive dir, Value val_type ,
 }
 
 /**
-* Generates the output file for the object code.
-*
-* Generate the object output file based on the data image and symbol table.
-*
-* @param file_name The name of the output file.
-* @param ic The instruction count (IC).
-* @param dc The data count (DC).
-* @return The status of the operation. Returns NO_ERROR on success, or FAILURE if an error occurred.
-*/
+ * Generates the output file for the object code.
+ *
+ * Generates the (.obj/ .ext/ .ent) output file based on the data image and symbol table,
+ * and by the output file extension determined by dir.
+ *
+ * @param src The source file_context pointer.
+ * @param dir The directive type.
+ * @return The status of the operation: NO_ERROR on success, FAILURE or TERMINATE if an error occurred.
+ */
 status generate_output_by_dest(file_context *src, Directive dir) {
     file_context *dest = NULL;
     status report = NO_ERROR;
@@ -848,13 +1004,27 @@ status generate_output_by_dest(file_context *src, Directive dir) {
     else
         return TERMINATE;
 
-    if (report != NO_ERROR)
+    if (report != NO_ERROR) {
+        fclose(dest->file_ptr);
+        dest->file_ptr = NULL;
         remove(dest->file_name);
+    }
 
     free_file_context(&dest);
     return report;
 }
 
+/**
+ * Writes the data image to the specified output stream.
+ *
+ * Writes the data image entries to the specified output stream. Includes the
+ * instruction count (IC) and data count (DC) in the output.
+ *
+ * @param src The source file_context pointer.
+ * @param dest The output stream to write the data image to.
+ * @return The status of the output generation: NO_ERROR on success, TERMINATE if no data
+ *         image is available or an error occurred.
+ */
 status write_data_img_to_stream(file_context *src, FILE *dest) {
     size_t i;
     int error_flag = 0;
@@ -882,7 +1052,7 @@ status write_data_img_to_stream(file_context *src, FILE *dest) {
         }
     }
 
-    fprintf(dest, "%lu\t%lu", (unsigned long)IC, (unsigned long)DC);
+    fprintf(dest, "%lu %lu", (unsigned long)IC, (unsigned long)DC);
 
     for (i = 0; i < data_arr_obj_index && !error_flag; i++) {
         if (!data_img_obj[i]->is_word_complete)
@@ -901,14 +1071,16 @@ status write_data_img_to_stream(file_context *src, FILE *dest) {
 
 /**
  * Writes the entry symbols and their addresses to the specified output stream.
- * Only generates output if there are existing entry symbols.
+ *
+ * Writes the entry symbols and their corresponding addresses to the specified
+ * output stream. Only generates output if there are existing entry symbols.
  *
  * @param src The source file_context pointer.
  * @param dest The output stream to write the entry information to.
- * @return The status of the output generation.
- *         Returns NO_ERROR if output was generated and no errors were encountered,
- *         TERMINATE if no output was generated (no entry symbols),
- *         or FAILURE in case of an error.
+ * @return The status of the output generation: NO_ERROR if output was generated
+ *         and no errors were encountered, TERMINATE if no output was generated
+ *         (no entry symbols), or FAILURE in case of an error.
+ *
  */
 status write_entry_to_stream(file_context *src, FILE *dest) {
     int i;
@@ -937,12 +1109,14 @@ status write_entry_to_stream(file_context *src, FILE *dest) {
 /**
  * Writes the extern symbols and their addresses to the specified output stream.
  *
+ * Writes the extern symbols and their corresponding addresses to the specified
+ * output stream. Generates output only if there are existing extern symbols.
+ *
  * @param src The source file_context pointer.
  * @param dest The output stream to write the extern information to.
- * @return The status of the output generation.
- *         Returns NO_ERROR if output was generated and no errors were encountered,
- *         TERMINATE if no output was generated (no extern symbols),
- *         or FAILURE in case of an error.
+ * @return The status of the output generation: NO_ERROR if output was generated
+ *         and no errors were encountered, TERMINATE if no output was generated
+ *         (no extern symbols), or FAILURE in case of an error.
  */
 status write_extern_to_stream(file_context *src, FILE *dest) {
     int i;
