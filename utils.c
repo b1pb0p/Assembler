@@ -151,10 +151,12 @@ size_t get_word(char **ptr, char *word, Delimiter delimiter) {
         target_delimiter = ',';
     else if (delimiter == COLON)
         target_delimiter = ':';
+    else if (delimiter == QUOTE)
+        target_delimiter = '\"';
     else
         target_delimiter = ' ';
 
-    while (**ptr && **ptr != target_delimiter && !isspace((int)**ptr)) {
+    while (**ptr && **ptr != target_delimiter && (!isspace((int)**ptr) || delimiter == QUOTE)){
         word[length] = **ptr;
         (*ptr)++;
         length++;
@@ -289,7 +291,7 @@ status is_valid_label(const char *label) {
         return ERR_ILLEGAL_CHARS;
 
     for (i = 1; i < length - 1; i++)
-        if (!isalnum(label[i]))
+        if (!isalnum(label[i]) || isspace(label[i]))
             return ERR_ILLEGAL_CHARS;
 
     if (label[length - 1] != ':' && !isalnum(label[length - 1]))
@@ -346,26 +348,93 @@ Value validate_data(file_context *src, char *word, size_t length, status *report
 }
 
 /**
+ * Extracts the next word from the line, accounting for spaces within a string.
+ *
+ * Extracts the next word from the line, considering spaces within a string.
+ * It allocates memory for the word and returns it. Updates the word length and report status accordingly.
+ *
+ * @param line The current line being processed. Will be updated to skip leading whitespace and the extracted word.
+ * @param word_len Pointer to store the length of the extracted word.
+ * @param report Pointer to the status report to indicate any errors.
+ * @return The extracted word as a dynamically allocated string, or NULL if an error occurred.
+ */
+char* has_spaces_string(char **line, size_t *word_len, status *report) {
+    char *next_word = NULL;
+    next_word = malloc(sizeof(char) * get_word_length(line) + 1);
+
+    if (!next_word) {
+        handle_error(ERR_MEM_ALLOC);
+        *report = ERR_MEM_ALLOC;
+        return NULL;
+    } else if (!(*word_len = get_word(line, next_word, COMMA)))
+        return NULL;
+    return next_word;
+}
+
+/**
+ * Concatenates and validates a string by appending space characters between words.
+ *
+ * This function is responsible for concatenating a string by adding space characters
+ * between words. It scans the input line and extracts each word, ensuring proper spacing
+ * between them. It returns the concatenated string and validates its format.
+ *
+ * @param line - A pointer to the input line string.
+ * @param word - A pointer to the string being concatenated and validated.
+ * @param length - A pointer to the length of the string.
+ * @param report - A pointer to the status report variable.
+ * @return The value indicating the type of the concatenated and validated string (STR or INV).
+ */
+Value concat_and_validate_string(char **line, char **word, size_t *length ,status *report) {
+    char *next_word = NULL;
+    char white_spaces_str[MAX_LABEL_LENGTH];
+    char *p_word = *word;
+    size_t word_len = 0, white_spaces_amt = 0;
+    status temp_report = NO_ERROR;
+
+    while (p_word[*length - 1] != '\"') {
+        **word = *p_word;
+
+        while(**line && isspace(**line)) {
+            white_spaces_str[white_spaces_amt++] = **line;
+            (*line)++;
+        }
+        white_spaces_str[white_spaces_amt] = '\0';
+        next_word = has_spaces_string(line, &word_len, &temp_report);
+        if (!next_word && temp_report == NO_ERROR) break;
+        else if (!next_word || ((p_word = realloc(p_word, (*length += word_len + white_spaces_amt) + 1)) &&
+                                !strcat(p_word, white_spaces_str) || !strcat(p_word, next_word))) {
+            *report = ERR_MEM_ALLOC;
+            return INV;
+        }
+        free(next_word);
+    }
+    *word = p_word;
+    return STR;
+}
+
+/**
  * Validates if the given string is a valid string value.
  *
- * @param src Pointer to the file context.
- * @param word The string to validate as a string value.
- * @param length The length of the word.
+ * @param line Pointer to address of the line.
+ * @param word Pointer to address of string to validate as a string value.
+ * @param length Pointer to the length of the word.
  * @param report Pointer to the status report.
  * @return The type of the string value (LBL, STR, or INV) if valid, or INV if invalid.
  */
-Value validate_string(file_context *src, char *word, size_t length, status *report) {
+Value validate_string(char **line ,char **p_word, size_t length, status *report) {
+    char *word = NULL;
     status temp_report;
+    size_t word_len = length;
+    word = *p_word;
+
     if (*word == '\"') {
-        if (word[length - 1] != '\"')
+        if (concat_and_validate_string(line, p_word, &word_len, report) == INV) return INV;
+        word = *p_word;
+        if (word[word_len - 1] != '\"')
             *report = ERR_MISSING_QMARK;
         return isalpha(word[1]) ? STR : INV;
     }
     else {
-        if (word[length - 1] == '\"') {
-            *report = ERR_MISSING_QMARK;
-            return isalpha(word[1]) ? STR : INV;
-        }
         temp_report = is_valid_label(word);
         if (temp_report != NO_ERROR && temp_report != ERR_MISSING_COLON) {
             *report = ERR_INVALID_SYNTAX;
@@ -506,4 +575,3 @@ void free_file_context(file_context** context) {
         *context = NULL;
     }
 }
-

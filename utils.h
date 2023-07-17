@@ -78,7 +78,8 @@ typedef enum {
 typedef enum {
     SPACE,
     COMMA,
-    COLON
+    COLON,
+    QUOTE
 } Delimiter;
 
 typedef struct {
@@ -92,6 +93,7 @@ typedef struct {
 
 
 char *strdup(const char *s);
+char* has_spaces_string(char **line, size_t *word_len, status *report);
 
 int safe_atoi(const char *str);
 int is_valid_register(file_context *src, const char* str, status *report);
@@ -106,8 +108,9 @@ status is_valid_label(const char *label);
 status copy_string(char** target, const char* source);
 status copy_n_string(char** target, const char* source, size_t count);
 
+Value validate_string(char **line ,char **p_word, size_t length, status *report);
 Value validate_data(file_context *src, char *word, size_t length, status *report);
-Value validate_string(file_context *src, char *word, size_t length, status *report);
+Value concat_and_validate_string(char **line, char **word, size_t *length ,status *report);
 
 Command is_command(const char* src);
 Directive is_directive(const char* src);

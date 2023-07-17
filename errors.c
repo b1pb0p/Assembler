@@ -38,6 +38,7 @@ const char *msg[MSG_LEN] = {
         "%s - Missing opening 'mcro' on line %d.",
         "%s - Missing closing 'endmcro' on line %d.",
         "%s - Invalid opcode (%s) on line %d.",
+        "%s - %s action has an empty body on line %d",
         "%s - Unused extern label (%s) on line %d.",
         "%s - Invalid macro name (%s) on line %d.",
         "%s - Label (%s) cannot start with a digit on line %d",
@@ -94,6 +95,13 @@ void handle_error(status code, ...) {
         fncall = va_arg(args, char*);
         fprintf(stderr, msg[code], fc->file_name, tolower(*fncall_par) == 'l' ? "label declaration"
         : *fncall_par == 'd' ? "data assigment" : "string assigment", fncall, fc->lc);
+    }
+    else if (code == WARN_EMPTY_DIR) {
+        fc = va_arg(args, file_context*);
+        dir = va_arg(args, Directive);
+        fprintf(stderr, "WARNING ->\t");
+        fprintf(stderr, msg[code], fc->file_name, dir == ENTRY ? "Entry" : dir == EXTERN ? "Extern"
+             : dir == DATA ? "Data" : "String"   , fc->lc);
     }
     else if (code == WARN_UNUSED_EXT) {
         fc = va_arg(args, file_context*);

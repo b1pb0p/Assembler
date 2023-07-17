@@ -41,7 +41,7 @@ symbol* find_symbol(const char* label);
 symbol* add_symbol(file_context *src, const char* label, int address, status *report);
 symbol *declare_label(file_context *src, char *label, size_t label_len, status *report);
 
-Value line_parser(file_context *src, Directive dir, char **line, char *word, status *report);
+Value line_parser(file_context *src, Directive dir, char **line, char **word, status *report);
 
 data_image* add_data_image(file_context *src, const char* label, status *report);
 

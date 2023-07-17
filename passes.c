@@ -34,6 +34,11 @@ size_t data_arr_obj_index = 0;
 int DC = 0;
 int IC = 0;
 int next_free_address = ADDRESS_START;
+/////
+
+
+
+/////
 
 /**
  * Perform the first pass of the assembler, processing each line and generating symbol table entries.
@@ -187,16 +192,16 @@ void handle_processing_line(file_context *src, char **line, symbol *sym, status 
  * @param report Pointer to the status variable to store error reports.
  */
 void process_data(file_context *src, const char *label, char *line, status *report) {
-    char word[MAX_LABEL_LENGTH];
     int is_first_value = 0;
     int *value = NULL;
     status temp_report;
     Value val_type;
     data_image *p_data = NULL;
+    char *word = malloc(MAX_LABEL_LENGTH);
 
     while (*line != '\n' && *line != '\0' && get_word(&line,word,COMMA) != 0) {
         temp_report = NO_ERROR;
-        val_type = line_parser(src, DATA, &line, word, &temp_report);
+        val_type = line_parser(src, DATA, &line, &word, &temp_report);
         *report = temp_report == NO_ERROR ? *report : temp_report;
 
         if (temp_report == ERR_EXTRA_COMMA || temp_report == ERR_INVALID_SYNTAX) {
@@ -213,12 +218,17 @@ void process_data(file_context *src, const char *label, char *line, status *repo
         }
 
         assert_data_img_by_label(src, label, &is_first_value, &value, &p_data, report);
-        if (*report == ERR_MEM_ALLOC)
+        if (*report == ERR_MEM_ALLOC) {
+            FREE_AND_NULL(word);
             return;
+        }
+
 
         is_first_value = 1;
-        if((temp_report = assert_value_to_data(src, DATA, val_type, word, &value, &p_data, report)) == TERMINATE)
+        if((temp_report = assert_value_to_data(src, DATA, val_type, word, &value, &p_data, report)) == TERMINATE) {
+            FREE_AND_NULL(word);
             return;
+        }
         else if (temp_report == FAILURE)
             continue;
 
@@ -227,9 +237,9 @@ void process_data(file_context *src, const char *label, char *line, status *repo
         p_data->concat = VALUE;
         DC++;
     }
-
+    FREE_AND_NULL(word);
     if (!is_first_value) /* Missing action after .data */
-        handle_error(ERR_INVALID_SYNTAX, src, "data", "[End Of Line]");
+        handle_error(WARN_EMPTY_DIR, src, DATA);
 }
 
 /**
@@ -249,13 +259,14 @@ void process_string(file_context *src, const char *label, char *line, status *re
 
     while (is_valid_string(&line, &word, report)) { /* Process each string */
         temp_report = NO_ERROR;
-        val_type = line_parser(src, STRING, &line, word, &temp_report);
+        val_type = line_parser(src, STRING, &line, &word, &temp_report);
         *report = temp_report == NO_ERROR ? *report : temp_report;
 
         if (temp_report == ERR_EXTRA_COMMA || temp_report == ERR_INVALID_SYNTAX) {
             is_first_value = is_first_value ? is_first_value : 1;
-            if (temp_report == ERR_INVALID_SYNTAX) handle_error(ERR_INVALID_SYNTAX, src, "data", word);
-            FREE_AND_NULL(word);
+            if (temp_report == ERR_INVALID_SYNTAX) handle_error(ERR_INVALID_SYNTAX, src, "string", word);
+            free(word);
+            word = NULL;
             continue;
         }
 
@@ -270,18 +281,16 @@ void process_string(file_context *src, const char *label, char *line, status *re
         p_word = word;
         while (val_type == LBL || (string_parser(src, &word, &p_ch, report) == NO_ERROR)) { /* Process each character */
             assert_data_img_by_label(src, label, &is_first_value, &value, &p_data, report);
-
             if (*report == ERR_MEM_ALLOC)
                 return;
-
             *value = (int)p_ch;
             if (val_type != LBL && !is_first_char && !isalpha(*value))
                 handle_error(ERR_ILLEGAL_CHARS, src, "string", word);
             else if (!is_first_char)
 
-            is_first_char = is_first_value =  1;
+                is_first_char = is_first_value =  1;
             temp_report = assert_value_to_data(src, STRING, val_type,
-            val_type == LBL ? p_word: &p_ch, &value, &p_data, report);
+                                               val_type == LBL ? p_word: &p_ch, &value, &p_data, report);
 
             if (temp_report == TERMINATE) {
                 FREE_AND_NULL(p_word);
@@ -296,10 +305,11 @@ void process_string(file_context *src, const char *label, char *line, status *re
             p_data->concat = VALUE;
             if (val_type == LBL) break;
         }
-       FREE_AND_NULL(p_word);
+        FREE_AND_NULL(p_word);
+        word = NULL;
     }
     if (!is_first_value) /* Missing action after .string */
-        handle_error(ERR_INVALID_SYNTAX, src, "label", "[End Of Line]");
+        handle_error(WARN_EMPTY_DIR, src, STRING);
     FREE_AND_NULL(p_word);
 }
 
@@ -316,15 +326,15 @@ void process_string(file_context *src, const char *label, char *line, status *re
  * @param report - A pointer to the status report.
  */
 void process_directive(file_context *src, Directive dir, const char *label, char *line, status *report) {
-    char word[MAX_LABEL_LENGTH];
     symbol *sym = NULL;
     int has_extern = 0;
+    char *word = malloc(MAX_LABEL_LENGTH);
 
     if (label)
         handle_error(WARN_MEANINGLESS_LABEL, src, label, dir);
 
     while (*line != '\n' && *line != '\0' && get_word(&line,word,COMMA) != 0) {
-        (void) line_parser(src, dir, &line, word, report);
+        (void) line_parser(src, dir, &line, &word, report);
         sym = add_symbol(src, word, INVALID_ADDRESS, report);
         has_extern = 1; /* flag for non-empty extern command */
 
@@ -349,9 +359,9 @@ void process_directive(file_context *src, Directive dir, const char *label, char
         sym->sym_dir = dir;
         if (sym->data) sym->data->directive = dir;
     }
+    if (word) free(word);
     if (!has_extern) {
-        handle_error(ERR_MISSING_LABEL, src, dir == ENTRY ? "entry" : "extern");
-        *report = ERR_MISSING_LABEL;
+        handle_error(WARN_EMPTY_DIR, src, dir);
     }
 }
 
@@ -463,7 +473,7 @@ void handle_one_operand(file_context *src, Command cmd, const char *label, char 
 
     op_mode = get_addressing_mode(src, word, word_len, report);
     if (!is_legal_addressing(src, cmd, INVALID_MD, op_mode, report) ||
-            (concat = get_concat_mode_one_op(INVALID_MD, op_mode)) == -1) {
+        (concat = get_concat_mode_one_op(INVALID_MD, op_mode)) == -1) {
         free(word);
         return;
     }
@@ -509,9 +519,9 @@ void handle_two_operands(file_context *src, Command cmd, const char *label, char
     size_t word_len, word_len_sec;
 
     word_len =  is_valid_string(&line, &word, report);
-    (void) line_parser(src, DEFAULT, &line, word, &temp_report);
+    (void) line_parser(src, DEFAULT, &line, &word, &temp_report);
     word_len_sec =  is_valid_string(&line, &next_word, report);
-    (void) line_parser(src, DEFAULT, &line, next_word, &temp_report);
+    (void) line_parser(src, DEFAULT, &line, &next_word, &temp_report);
 
     if (!word || !next_word) {
         *report = *report == ERR_MEM_ALLOC ? ERR_MEM_ALLOC : ERR_MISS_OPERAND;
@@ -531,7 +541,7 @@ void handle_two_operands(file_context *src, Command cmd, const char *label, char
     sec_op_mode = get_addressing_mode(src, next_word, word_len_sec, report);
 
     if (!is_legal_addressing(src, cmd, op_mode, sec_op_mode, report) ||
-            get_concat_mode(op_mode, sec_op_mode, &concat_1, &concat_2) != NO_ERROR) {
+        get_concat_mode(op_mode, sec_op_mode, &concat_1, &concat_2) != NO_ERROR) {
         if (word) free(word);
         if (next_word) free(next_word);
         return;
@@ -571,33 +581,33 @@ void handle_two_operands(file_context *src, Command cmd, const char *label, char
 }
 
 /**
- * line_parser - Parse a line and extract a word
- *
  * Parses a line and extracts a word based on the specified delimiter.
  * It also handles the removal of commas and checks for extra text or missing comma errors.
  *
- * @param src - Pointer to the source file context.
- * @param dir - The directive being processed.
- * @param line - A pointer to the line string.
- * @param word - A pointer to store the extracted word.
- * @param report - A pointer to the status report.
+ * @param src The pointer to the source file context.
+ * @param dir The directive being processed.
+ * @param line A pointer to the line string.
+ * @param word A pointer to store the extracted word.
+ * @param report A pointer to the status report.
  * @return The value indicating the type of the parsed word (LBL, INV, etc.).
  */
-Value line_parser(file_context *src, Directive dir, char **line, char *word, status *report) {
+Value line_parser(file_context *src, Directive dir, char **line, char **word, status *report) {
     size_t length;
+    char *p_line = *line;
+    Value ret_val;
 
     if (!word) {
         handle_error(TERMINATE, "line_parser()");
         return INV;
     }
 
-    while (*word && isspace(*word))
-        word++;
+    while (**word && isspace(**word))
+        (*word)++;
 
-    length = strlen(word);
+    length = strlen(*word);
 
-    while (*word == ',' && length >= 1) {
-        word++;
+    while (**word == ',' && length >= 1) {
+        (*word)++;
         length--;
         *report = ERR_EXTRA_COMMA;
         handle_error(ERR_EXTRA_COMMA, src);
@@ -609,10 +619,10 @@ Value line_parser(file_context *src, Directive dir, char **line, char *word, sta
     }
 
 
-    if (word[length - 1] != ',') {
+    if ((*word)[length - 1] != ',') {
         while (**line && isspace(**line))
             (*line)++;
-        if (**line != ',' && **line != '\0') {
+        if (**line != ',' && **line != '\0' && **word != '\"') {
             *report = ERR_MISSING_COMMA;
             handle_error(ERR_MISSING_COMMA, src);
         }
@@ -624,27 +634,35 @@ Value line_parser(file_context *src, Directive dir, char **line, char *word, sta
             *report = ERR_EXTRA_COMMA;
             handle_error(ERR_EXTRA_COMMA, src);
         }
-        word[length - 1] = '\0';
+        (*word)[length - 1] = '\0';
+        length--;
     }
 
     if (dir == DATA)
-        return validate_data(src, word, length, report);
-    else if (dir == STRING)
-        return validate_string(src, word, length, report);
+        return validate_data(src, *word, length, report);
+    else if (dir == STRING && (*line = p_line)) {
+        ret_val = validate_string(line , word, length, report);
+        while (**line && isspace(**line)) (*line)++;
+        p_line = *line;
+        while (**line && isspace(**line)) (*line)++;
+        if (*p_line != ',' && (**line != '\0' && **line != '\n')) {
+            *report = ERR_MISSING_COMMA;
+            handle_error(ERR_MISSING_COMMA, src);
+        }
+        return ret_val;
+    }
     else
         return LBL;
 }
 
 /**
- * string_parser - Parse a string and extract characters
- *
  * Parses a string and extracts characters one by one.
  * It handles the opening and closing quotation marks of the string and reports any errors.
  *
- * @param src - Pointer to the source file context.
- * @param word - A pointer to the string being parsed.
- * @param ch - A pointer to store the extracted character.
- * @param report - A pointer to the status report.
+ * @param src The pointer to the source file context.
+ * @param word A pointer to the string being parsed.
+ * @param ch A pointer to store the extracted character.
+ * @param report A pointer to the status report.
  * @return The status of the parsing operation.
  *         Returns TERMINATE if the end of the string is reached,
  *         or NO_ERROR if the parsing is successful.
@@ -653,6 +671,12 @@ status string_parser(file_context *src, char **word, char *ch, status *report) {
     static int is_first_qmark = 0;
     static status reached_end = 0;
     status ret_val = NO_ERROR;
+
+    if (!src && !word && !ch && !report) { /* resetting static variable */
+        is_first_qmark = 0;
+        reached_end = 0;
+        return NO_ERROR;
+    }
 
     if (reached_end) {
         reached_end = 0;
@@ -675,16 +699,16 @@ status string_parser(file_context *src, char **word, char *ch, status *report) {
         }
     }
     else {
-       if ((*word)[1] == '\0' || (*word)[1] == '\n') {
+        if ((*word)[1] == '\0' || (*word)[1] == '\n') {
             is_first_qmark = 0;
             reached_end = 1;
             *report = ERR_MISSING_QMARK;
             handle_error(ERR_MISSING_QMARK, src);
         }  else if (!is_first_qmark) {
-           is_first_qmark = 1;
-           *report = ERR_MISSING_QMARK;
-           handle_error(ERR_MISSING_QMARK, src);
-       }
+            is_first_qmark = 1;
+            *report = ERR_MISSING_QMARK;
+            handle_error(ERR_MISSING_QMARK, src);
+        }
     }
     *ch = **word;
     (*word)++;
@@ -813,7 +837,14 @@ data_image* add_data_image(file_context *src, const char* label, status *report)
     static size_t data_obj_cap = 0;
     size_t new_cap = data_obj_cap + DEFAULT_DATA_IMAGE_CAP;
     data_image **data_arr = NULL;
-    data_image *new_image = create_data_image(src->lc, &next_free_address);
+    data_image *new_image = NULL;
+
+    if (!src && !label && !report) { /* resetting static variable */
+        data_obj_cap = 0;
+        return NULL;
+    }
+
+    new_image = create_data_image(src->lc, &next_free_address);
 
     if (next_free_address == MAX_MEMORY_SIZE) {
         handle_error(TERMINATE, "The input file requires too much memory.");
@@ -956,10 +987,10 @@ status assert_value_to_data(file_context *src, Directive dir, Value val_type ,
     }
     else {
         if (temp_report == ERR_INVALID_LABEL || temp_report == ERR_ILLEGAL_CHARS)
-           temp_report == ERR_INVALID_LABEL ? handle_error(temp_report, src, word) :
-           handle_error(temp_report, src, "label" ,word);
+            temp_report == ERR_INVALID_LABEL ? handle_error(temp_report, src, word) :
+            handle_error(temp_report, src, "label" ,word);
         *report = ERR_INVALID_SYNTAX;
-        free_data_image(&data_img_obj[data_arr_obj_index--]);
+        free_data_image(&data_img_obj[--data_arr_obj_index]);
         return FAILURE;
     }
     return NO_ERROR;
@@ -1046,7 +1077,7 @@ status write_data_img_to_stream(file_context *src, FILE *dest) {
             }
         }
         else if (!runner->is_word_complete && runner->concat == ADDRESS
-            && handle_address_reference(runner, runner->p_sym) != NO_ERROR) {
+                 && handle_address_reference(runner, runner->p_sym) != NO_ERROR) {
             error_flag = 1;
             handle_error(ERR_LABEL_DOES_NOT_EXIST, src, runner->p_sym->label, runner->lc);
         }
@@ -1165,6 +1196,9 @@ void free_global_data_and_symbol() {
     free_data_image_array(&data_img_obj, &data_arr_obj_index);
     free_symbol_table(&symbol_table, &symbol_count);
     DC = IC = 0;
+    next_free_address = ADDRESS_START;
+    (void) add_data_image(NULL, NULL, NULL); /* resetting static variables */
+    (void) string_parser(NULL, NULL, NULL, NULL);
 }
 
 /**
