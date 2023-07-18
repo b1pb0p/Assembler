@@ -34,11 +34,6 @@ size_t data_arr_obj_index = 0;
 int DC = 0;
 int IC = 0;
 int next_free_address = ADDRESS_START;
-/////
-
-
-
-/////
 
 /**
  * Perform the first pass of the assembler, processing each line and generating symbol table entries.
@@ -159,7 +154,12 @@ void handle_processing_line(file_context *src, char **line, symbol *sym, status 
 
     word_len =  get_word(line, next_word, SPACE);
     if (sym) p_label = sym->label;
-
+    if (next_word[word_len - 1] == ',') {
+        next_word[word_len - 1] = '\0';
+        word_len--;
+        *report = ERR_EXTRA_COMMA;
+        handle_error(ERR_EXTRA_COMMA, src);
+    }
 
     has_directive = word_len && ((dir = is_directive(next_word)) || (dir = is_directive(next_word + 1)));
     has_command = word_len && ((cmd = is_command(next_word)) != INV_CMD);
@@ -464,11 +464,16 @@ void handle_one_operand(file_context *src, Command cmd, const char *label, char 
         if (word) free(word);
         return;
     } else if (get_word_length(&line)) {
-        *report = ERR_EXTRA_TEXT;
-        handle_error(ERR_EXTRA_TEXT, src);
-    } else if (word_len > MAX_LABEL_LENGTH) {
+        *report = (word[word_len - 1] == ',') ? ERR_TOO_MANY_OPERANDS : ERR_EXTRA_TEXT;
+        handle_error(*report, src);
+    } if (word_len > MAX_LABEL_LENGTH) {
         *report = ERR_OPERAND_TOO_LONG;
         handle_error(ERR_OPERAND_TOO_LONG);
+    } if (word[word_len - 1] == ',') {
+        word[word_len - 1] = '\0';
+        word_len--;
+        *report = ERR_EXTRA_COMMA;
+        handle_error(ERR_EXTRA_COMMA, src);
     }
 
     op_mode = get_addressing_mode(src, word, word_len, report);
@@ -532,7 +537,7 @@ void handle_two_operands(file_context *src, Command cmd, const char *label, char
     } else if (get_word_length(&line)) {
         *report = ERR_EXTRA_TEXT;
         handle_error(ERR_EXTRA_TEXT, src);
-    } else if (word_len > MAX_LABEL_LENGTH || word_len_sec > MAX_LABEL_LENGTH) {
+    } if (word_len > MAX_LABEL_LENGTH || word_len_sec > MAX_LABEL_LENGTH) {
         *report = ERR_OPERAND_TOO_LONG;
         handle_error(ERR_OPERAND_TOO_LONG);
     }
@@ -596,8 +601,9 @@ Value line_parser(file_context *src, Directive dir, char **line, char **word, st
     char *p_line = *line;
     Value ret_val;
 
-    if (!word) {
-        handle_error(TERMINATE, "line_parser()");
+    if (!(*word)) {
+        if (dir != DEFAULT) /* in case of 'DEFAULT' we handle missing operands within "handle_two_operands()" */
+            handle_error(TERMINATE, "line_parser()");
         return INV;
     }
 

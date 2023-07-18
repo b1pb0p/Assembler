@@ -87,7 +87,7 @@ typedef struct {
     char* file_name;
     char* file_name_wout_ext;
     int lc; /* Line counter */
-    int tc; /* total file counter */
+    int tc; /* total num of files counter */
     int fc; /* file counter (x out of tc) */
 } file_context;
 

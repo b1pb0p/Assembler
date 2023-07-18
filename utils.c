@@ -366,8 +366,10 @@ char* has_spaces_string(char **line, size_t *word_len, status *report) {
         handle_error(ERR_MEM_ALLOC);
         *report = ERR_MEM_ALLOC;
         return NULL;
-    } else if (!(*word_len = get_word(line, next_word, COMMA)))
+    } else if (!(*word_len = get_word(line, next_word, COMMA))) {
+        free (next_word);
         return NULL;
+    }
     return next_word;
 }
 
@@ -402,8 +404,9 @@ Value concat_and_validate_string(char **line, char **word, size_t *length ,statu
         next_word = has_spaces_string(line, &word_len, &temp_report);
         if (!next_word && temp_report == NO_ERROR) break;
         else if (!next_word || ((p_word = realloc(p_word, (*length += word_len + white_spaces_amt) + 1)) &&
-                                !strcat(p_word, white_spaces_str) || !strcat(p_word, next_word))) {
+                (!strcat(p_word, white_spaces_str) || !strcat(p_word, next_word)))) {
             *report = ERR_MEM_ALLOC;
+            if (next_word) free(next_word);
             return INV;
         }
         free(next_word);

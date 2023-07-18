@@ -42,7 +42,6 @@ const char *msg[MSG_LEN] = {
         "%s - Unused extern label (%s) on line %d.",
         "%s - Invalid macro name (%s) on line %d.",
         "%s - Label (%s) cannot start with a digit on line %d",
-        "%s - Missing symbol name in .%s directive. one line %d",
         "%s - Label (%s) cannot act as both entry and extern on line %d",
         "%s - Label (%s) is being declared/used in a forbidden context on line %d",
         "%s - Invalid label name (%s) on line %d.",
