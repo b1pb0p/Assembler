@@ -45,16 +45,22 @@ status assembler_first_pass(file_context **src) {
     char line[MAX_BUFFER_LENGTH];
     file_context *p_src = NULL;
     status report = NO_ERROR;
-    int has_error = 0;
+    int has_error = 0, ch = -1;;
 
     p_src = *src;
 
     if (!p_src)
         return FAILURE;
 
-    /* Checking for comment lines (;), invalid line start and handling too long lines
+    /* The check for comment lines (;), invalid line start, and handling too long lines
      * is taken care of at the preprocessor stage. */
-    while (fscanf(p_src->file_ptr, "%[^\n]%*c", line) == 1 && report != ERR_MEM_ALLOC) {
+    while ((fscanf(p_src->file_ptr, "%[^\n]%*c", line) == 1  || (ch = fgetc(p_src->file_ptr)) == '\n')
+        && report != ERR_MEM_ALLOC) {
+        if (ch == '\n') {
+            ch = -1;
+            continue; /* empty line */
+        }
+
         report =  process_line(p_src,line);
         p_src->lc++;
         has_error = report != NO_ERROR ? 1 : has_error;
@@ -197,7 +203,9 @@ void process_data(file_context *src, const char *label, char *line, status *repo
     status temp_report;
     Value val_type;
     data_image *p_data = NULL;
+    char *p_word = NULL;
     char *word = malloc(MAX_LABEL_LENGTH);
+    p_word = word;
 
     while (*line != '\n' && *line != '\0' && get_word(&line,word,COMMA) != 0) {
         temp_report = NO_ERROR;
@@ -219,27 +227,27 @@ void process_data(file_context *src, const char *label, char *line, status *repo
 
         assert_data_img_by_label(src, label, &is_first_value, &value, &p_data, report);
         if (*report == ERR_MEM_ALLOC) {
-            FREE_AND_NULL(word);
+            FREE_AND_NULL(p_word);
             return;
         }
 
-
         is_first_value = 1;
         if((temp_report = assert_value_to_data(src, DATA, val_type, word, &value, &p_data, report)) == TERMINATE) {
-            FREE_AND_NULL(word);
+            FREE_AND_NULL(p_word);
             return;
         }
         else if (temp_report == FAILURE)
             continue;
 
-
         p_data->value = value;
         p_data->concat = VALUE;
         DC++;
     }
-    FREE_AND_NULL(word);
-    if (!is_first_value) /* Missing action after .data */
+    FREE_AND_NULL(p_word);
+
+    if (!is_first_value) {/* Missing action after .data */
         handle_error(WARN_EMPTY_DIR, src, DATA);
+    }
 }
 
 /**
@@ -265,7 +273,7 @@ void process_string(file_context *src, const char *label, char *line, status *re
         if (temp_report == ERR_EXTRA_COMMA || temp_report == ERR_INVALID_SYNTAX) {
             is_first_value = is_first_value ? is_first_value : 1;
             if (temp_report == ERR_INVALID_SYNTAX) handle_error(ERR_INVALID_SYNTAX, src, "string", word);
-            free(word);
+            free(p_word);
             word = NULL;
             continue;
         }
@@ -336,18 +344,19 @@ void process_directive(file_context *src, Directive dir, const char *label, char
     while (*line != '\n' && *line != '\0' && get_word(&line,word,COMMA) != 0) {
         (void) line_parser(src, dir, &line, &word, report);
         sym = add_symbol(src, word, INVALID_ADDRESS, report);
-        has_extern = 1; /* flag for non-empty extern command */
+        has_extern = 1; /* Flag for non-empty extern command */
 
-        if (!sym)
+        if (!sym) /* Error handling is taken care of within add_symbol() */
             continue;
-        if (dir == EXTERN && !sym->is_missing_info) {
-            handle_error(ERR_FORBIDDEN_LABEL_DECLARE, src, sym->label);
-            *report = ERR_FORBIDDEN_LABEL_DECLARE;
-            continue;
-        }
-        else if (sym->sym_dir != DEFAULT && sym->sym_dir != dir) {
+
+        if (sym->sym_dir != DEFAULT && sym->sym_dir != dir) {
             handle_error(ERR_BOTH_DIR, src, sym->label);
             *report = ERR_BOTH_DIR;
+            continue;
+        }
+        else if ((dir == EXTERN && !sym->is_missing_info) || word[strlen(word) - 1] == ':') {
+            handle_error(ERR_FORBIDDEN_LABEL_DECLARE, src, sym->label);
+            *report = ERR_FORBIDDEN_LABEL_DECLARE;
             continue;
         }
         else if (sym->sym_dir == dir) {
@@ -359,7 +368,7 @@ void process_directive(file_context *src, Directive dir, const char *label, char
         sym->sym_dir = dir;
         if (sym->data) sym->data->directive = dir;
     }
-    if (word) free(word);
+    FREE_AND_NULL(word);
     if (!has_extern) {
         handle_error(WARN_EMPTY_DIR, src, dir);
     }
@@ -424,8 +433,6 @@ void handle_no_operands(file_context *src, Command cmd, const char *label, char 
     temp_report = process_data_img_dec(p_data, INVALID_MD, cmd, INVALID_MD, ABSOLUTE);
     if (temp_report != NO_ERROR) {
         *report = temp_report;
-        free_data_image(&p_data);
-        if (sym) free_symbol(&sym);
         return;
     }
 
@@ -488,8 +495,6 @@ void handle_one_operand(file_context *src, Command cmd, const char *label, char 
     temp_report = process_data_img_dec(p_data_word, INVALID_MD, cmd, op_mode, ABSOLUTE);
 
     if (!p_data_word || !p_data_op || temp_report != NO_ERROR ) {
-        if (p_data_word) free_data_image(&p_data_word);
-        if (p_data_op) free_data_image(&p_data_op);
         free(word);
         *report = ERR_MEM_ALLOC;
         return;
@@ -553,14 +558,15 @@ void handle_two_operands(file_context *src, Command cmd, const char *label, char
     }
 
     p_data_word = add_data_image(src, label, report);
-
-    if (concat_1 == concat_2 && concat_1 == REG_REG)
-        p_data_op = assemble_operand_data_img(src, concat_1, op_mode, word, next_word);
-    else {
-        p_data_op = assemble_operand_data_img(src, concat_1, op_mode, word);
-        p_data_sec_op = assemble_operand_data_img(src, concat_2, sec_op_mode, next_word);
+    if (p_data_word) {
+        if (concat_1 == concat_2 && concat_1 == REG_REG)
+            p_data_op = assemble_operand_data_img(src, concat_1, op_mode, word, next_word);
+        else {
+            p_data_op = assemble_operand_data_img(src, concat_1, op_mode, word);
+            p_data_sec_op = assemble_operand_data_img(src, concat_2, sec_op_mode, next_word);
+        }
+        secondary_temp = process_data_img_dec(p_data_word, op_mode, cmd, sec_op_mode, ABSOLUTE);
     }
-    secondary_temp = process_data_img_dec(p_data_word, op_mode, cmd, sec_op_mode, ABSOLUTE);
 
     if (!p_data_word || (!p_data_op || (concat_1 != REG_REG && !p_data_sec_op)) ||
         secondary_temp != NO_ERROR || temp_report != NO_ERROR) {
@@ -799,11 +805,11 @@ symbol *add_symbol(file_context *src, const char *label, int address, status *re
         new_symbol_table = realloc(symbol_table, (symbol_count + 1) * sizeof(symbol*));
         new_symbol = malloc(sizeof(symbol));
 
-        if (new_symbol) new_symbol->label = NULL;
+        if (new_symbol) new_symbol->label = new_symbol->address_binary = NULL;
         if (!label || !new_symbol_table || !new_symbol || copy_string(&(new_symbol->label), label) != NO_ERROR)    {
             handle_error(ERR_MEM_ALLOC);
             if (new_symbol) free_symbol(&new_symbol);
-            if (new_symbol_table) free_symbol_table(&symbol_table, &symbol_count);
+            symbol_table = new_symbol_table ? new_symbol_table : symbol_table;
             *report = ERR_MEM_ALLOC;
             return NULL;
         }
@@ -854,12 +860,14 @@ data_image* add_data_image(file_context *src, const char* label, status *report)
 
     if (next_free_address == MAX_MEMORY_SIZE) {
         handle_error(TERMINATE, "The input file requires too much memory.");
+        if (new_image) free_data_image(&new_image);
         *report = TERMINATE;
         return NULL;
     }
 
     if (!new_image || (data_obj_cap <= data_arr_obj_index &&
                        !(data_arr = realloc(data_img_obj, (new_cap) * sizeof(data_image *))))) {
+        if (new_image) free_data_image(&new_image);
         *report = ERR_MEM_ALLOC;
         return NULL;
     }
@@ -936,11 +944,11 @@ void assert_data_img_by_label(file_context *src, const char *label, int *flag,
                               int **value, data_image **p_data, status *report) {
     if (label && !*flag) {
         *flag = 1;
-        if (!(*p_data = add_data_image(src, label, report)) && *report == ERR_MEM_ALLOC)
+        if (!(*p_data = add_data_image(src, label, report)) && (*report == ERR_MEM_ALLOC || *report == TERMINATE))
             return;
     }
     else {/* A label can only be associated with the initial value */
-        if (!(*p_data = add_data_image(src, NULL, report)) && *report == ERR_MEM_ALLOC)
+        if (!(*p_data = add_data_image(src, NULL, report)) && (*report == ERR_MEM_ALLOC || *report == TERMINATE))
             return;
     }
 
@@ -1223,5 +1231,3 @@ void cleanup(file_context **src) {
     *src = NULL;
     free_global_data_and_symbol();
 }
-
-

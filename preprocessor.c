@@ -126,7 +126,7 @@ status handle_macro_start(file_context *src, char *line, int *found_macro,
         else if (endmcro){
             COUNT_SPACES(line_offset, endmcro);
             endmcro += SKIP_MCR0_END + line_offset;
-            if (endmcro[line_offset] != '\0') {
+            if (*endmcro != '\0') {
                 handle_error(ERR_EXTRA_TEXT, src); /* Extraneous text after endmacro */
                 report = FAILURE;
             }

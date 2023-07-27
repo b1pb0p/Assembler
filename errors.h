@@ -6,7 +6,7 @@
 #ifndef ASSEMBLER_ERRORS_H
 #define ASSEMBLER_ERRORS_H
 
-#define MSG_LEN 45
+#define MSG_LEN 44
 extern const char *msg[MSG_LEN];
 
 typedef enum {

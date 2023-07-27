@@ -76,7 +76,7 @@ void handle_error(status code, ...) {
     va_start(args, code);
 
     if (code == FAILURE || code == ERR_MEM_ALLOC)
-        fprintf(stderr, code == ERR_MEM_ALLOC ? "ERROR ->\t" : "TERMINATED ->\t%s", msg[code]);
+        fprintf(stderr, code == ERR_MEM_ALLOC ? "ERROR ->\t%s" : "TERMINATED ->\t%s", msg[code]);
     else if (code == TERMINATE || code == ERR_FOUND_ASSEMBLER) {
         fncall =  va_arg(args, char *);
         fprintf(stderr, code == TERMINATE ? "INTERNAL ERROR ->\t" : "TERMINATED ->\t");
