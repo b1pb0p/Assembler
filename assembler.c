@@ -1,5 +1,8 @@
 /* Assembler Project in 20465 - System Programming Laboratory
- * @author Bar Toplian - 323869065- bar.toplian@gmail.com
+ * 12 bits assembler.
+ * Author: Bar Toplian
+ * ID: 323869065
+ * Email: bar.toplian@gmail.com
  */
 
 #include <stdio.h>
