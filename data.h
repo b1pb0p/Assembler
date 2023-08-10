@@ -1,6 +1,8 @@
 /* data.h
- * data image and base conversions.
- * @author Bar Toplian - 323869065- bar.toplian@gmail.com
+ * Header file for the data image and base conversions.
+ * Author: Bar Toplian
+ * ID: 323869065
+ * Email: bar.toplian@gmail.com
  */
 
 #ifndef ASSEMBLER_DATA_H

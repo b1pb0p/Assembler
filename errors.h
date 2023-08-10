@@ -1,7 +1,9 @@
 /* errors.h
-* Error Handling
-* @author Bar Toplian - 323869065- bar.toplian@gmail.com
-*/
+ * Header file for error Handling and status handling.
+ * Author: Bar Toplian
+ * ID: 323869065
+ * Email: bar.toplian@gmail.com
+ */
 
 #ifndef ASSEMBLER_ERRORS_H
 #define ASSEMBLER_ERRORS_H

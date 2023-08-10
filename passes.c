@@ -1,5 +1,5 @@
-/* first_pass.c
- * Assembler's first and second passes process.
+/* passes.c
+ * Assembler first and second passes process.
  * Author: Bar Toplian
  * ID: 323869065
  * Email: bar.toplian@gmail.com

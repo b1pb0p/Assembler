@@ -1,6 +1,8 @@
 /* passes.h
- * Assembler's first and second pass processes.
- * @author Bar Toplian - 323869065- bar.toplian@gmail.com
+ * Header file for the assembler first and second passes process.
+ * Author: Bar Toplian
+ * ID: 323869065
+ * Email: bar.toplian@gmail.com
  */
 
 #include "utils.h"

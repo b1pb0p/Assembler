@@ -1,6 +1,8 @@
 /* utils.h
- * declaration for utilities functions, managing input and globals.
- * @author Bar Toplian - 323869065- bar.toplian@gmail.com
+ * Header file for utility and input managing methods.
+ * Author: Bar Toplian
+ * ID: 323869065
+ * Email: bar.toplian@gmail.com
  */
 
 #ifndef ASSEMBLER_UTILS_H

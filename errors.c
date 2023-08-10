@@ -1,7 +1,9 @@
 /* errors.c
-* Error Handling
-* @author Bar Toplian - 323869065- bar.toplian@gmail.com
-*/
+ * Error Handling and status handling.
+ * Author: Bar Toplian
+ * ID: 323869065
+ * Email: bar.toplian@gmail.com
+ */
 
 #include <stdio.h>
 #include <stdarg.h>
