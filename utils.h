@@ -110,9 +110,9 @@ status is_valid_label(const char *label);
 status copy_string(char** target, const char* source);
 status copy_n_string(char** target, const char* source, size_t count);
 
-Value validate_string(char **line ,char **p_word, size_t length, status *report);
+Value validate_string(file_context *src, char **line ,char **p_word, size_t length, int *DC, status *report);
 Value validate_data(file_context *src, char *word, size_t length, status *report);
-Value concat_and_validate_string(char **line, char **word, size_t *length ,status *report);
+Value concat_and_validate_string(file_context *src, char **line, char **word, size_t *length, int *DC, status *report);
 
 Command is_command(const char* src);
 Directive is_directive(const char* src);

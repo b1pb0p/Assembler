@@ -475,7 +475,7 @@ status concat_reg_dest(data_image *data, char** binary_word) {
     char *dest_op = NULL;
     status report = NO_ERROR;
 
-    dest_op = truncate_string(data->binary_dest, SRC_DEST_OP_BINARY_LEN);
+    dest_op = truncate_string(data->binary_dest, REGISTER_BINARY_LEN);
 
     if (!dest_op) {
         handle_error(TERMINATE, "concat_reg_dest()");
@@ -661,6 +661,7 @@ void free_symbol(symbol **symbol_t) {
         free((*symbol_t)->label);
     if ((*symbol_t)->address_binary)
         free((*symbol_t)->address_binary);
+
     free(*symbol_t);
     *symbol_t = NULL;
 }
@@ -694,7 +695,7 @@ void free_symbol_table(symbol ***p_symbol_table, size_t *size) {
  */
 void free_data_image(data_image** data) {
     if (data == NULL || *data == NULL) return;
-    if (!((*data)->p_sym && (*data)->binary_src)) free((*data)->binary_src);
+    if (!((*data)->p_sym && (*data)->binary_src) && (*data)->concat != ADDRESS) free((*data)->binary_src);
     if ((*data)->binary_opcode) free((*data)->binary_opcode);
     if ((*data)->binary_dest) free((*data)->binary_dest);
     if ((*data)->binary_a_r_e) free((*data)->binary_a_r_e);

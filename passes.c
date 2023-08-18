@@ -90,7 +90,7 @@ status assembler_first_pass(file_context **src) {
  * @return The status of the operation (NO_ERROR or FAILURE).
  */
 status assembler_second_pass(file_context **src) {
-    status report;
+    status report = NO_ERROR;
     file_context *p_src = *src;
 
     if (!p_src)
@@ -653,7 +653,7 @@ Value line_parser(file_context *src, Directive dir, char **line, char **word, st
     if (dir == DATA)
         return validate_data(src, *word, length, report);
     else if (dir == STRING && (*line = p_line)) {
-        ret_val = validate_string(line , word, length, report);
+        ret_val = validate_string(src, line , word, length, &DC, report);
         while (**line && isspace(**line)) (*line)++;
         p_line = *line;
         while (**line && isspace(**line)) (*line)++;
@@ -1130,7 +1130,6 @@ status write_data_img_to_stream(file_context *src, FILE *dest) {
 status write_entry_to_stream(file_context *src, FILE *dest) {
     int i;
     int error_flag = 0;
-    int has_entry = 0;
     symbol *runner = NULL;
 
     if (!data_arr_obj_index) return FAILURE;
@@ -1138,7 +1137,6 @@ status write_entry_to_stream(file_context *src, FILE *dest) {
     for (i = 0; i < symbol_count; i++) {
         runner = symbol_table[i];
         if (runner && runner->sym_dir == ENTRY) {
-            has_entry = 1;
             if (runner->is_missing_info) {
                 error_flag = 1;
                 handle_error(ERR_LABEL_DOES_NOT_EXIST, src, runner->label, runner->lc);
@@ -1148,7 +1146,7 @@ status write_entry_to_stream(file_context *src, FILE *dest) {
                 fprintf(dest, "%s\t%d\n", runner->label, runner->address_decimal);
         }
     }
-    return error_flag ? FAILURE : !has_entry ? TERMINATE : NO_ERROR;
+    return error_flag ? FAILURE : NO_ERROR;
 }
 
 /**
@@ -1166,7 +1164,6 @@ status write_entry_to_stream(file_context *src, FILE *dest) {
 status write_extern_to_stream(file_context *src, FILE *dest) {
     int i;
     int error_flag = 0;
-    int has_extern = 0;
     data_image *runner = NULL;
     symbol *sym = NULL;
 
@@ -1175,7 +1172,6 @@ status write_extern_to_stream(file_context *src, FILE *dest) {
     for (i = 0; i < data_arr_obj_index; i++) {
         runner = data_img_obj[i];
         if (runner && runner->p_sym && runner->p_sym->sym_dir == EXTERN) {
-            has_extern = 1;
             if (runner->p_sym->address_binary) free (runner->p_sym->address_binary);
 
             runner->p_sym->address_binary = decimal_to_binary12(EXTERNAL);
@@ -1200,7 +1196,7 @@ status write_extern_to_stream(file_context *src, FILE *dest) {
         if (sym->sym_dir == EXTERN && sym->is_missing_info)
             handle_error(WARN_UNUSED_EXT, src, sym->label, sym->lc);
     }
-    return  !has_extern ? TERMINATE : NO_ERROR;
+    return error_flag ? TERMINATE : NO_ERROR;
 }
 
 /**

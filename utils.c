@@ -11,6 +11,7 @@
 #include <ctype.h>
 #include "errors.h"
 #include "utils.h"
+#include "passes.h"
 
 const char *directives[DIRECTIVE_LEN] = {
     "data",
@@ -293,7 +294,7 @@ status is_valid_label(const char *label) {
         return ERR_ILLEGAL_CHARS;
 
     for (i = 1; i < length - 1; i++)
-        if (!isalnum(label[i]) || isspace(label[i]))
+        if (!isalnum(label[i]) || isspace(label[i])) /* If you want to allow underscores use: || label[i] != '_'  */
             return ERR_ILLEGAL_CHARS;
 
     if (label[length - 1] != ':' && !isalnum(label[length - 1]))
@@ -388,18 +389,30 @@ char* has_spaces_string(char **line, size_t *word_len, status *report) {
  * @param report - A pointer to the status report variable.
  * @return The value indicating the type of the concatenated and validated string (STR or INV).
  */
-Value concat_and_validate_string(char **line, char **word, size_t *length ,status *report) {
+Value concat_and_validate_string(file_context *src, char **line, char **word, size_t *length, int *DC, status *report) {
+    data_image *p_data = NULL;
     char *next_word = NULL;
     char white_spaces_str[MAX_LABEL_LENGTH];
     char *p_word = *word;
     size_t word_len = 0, white_spaces_amt = 0;
     status temp_report = NO_ERROR;
+    int is_first_value = 1, *value = NULL;;
 
     while (p_word[*length - 1] != '\"') {
         **word = *p_word;
 
         while(**line && isspace(**line)) {
             white_spaces_str[white_spaces_amt++] = **line;
+
+            assert_data_img_by_label(src, NULL, &is_first_value, &value, &p_data, report);
+            if (*report == ERR_MEM_ALLOC)
+                return INV;
+            temp_report = assert_value_to_data(src, STRING, STR,*line, &value, &p_data, report);
+
+            p_data->value = value;
+            p_data->concat = VALUE;
+
+            (*DC)++;
             (*line)++;
         }
         white_spaces_str[white_spaces_amt] = '\0';
@@ -426,14 +439,14 @@ Value concat_and_validate_string(char **line, char **word, size_t *length ,statu
  * @param report Pointer to the status report.
  * @return The type of the string value (LBL, STR, or INV) if valid, or INV if invalid.
  */
-Value validate_string(char **line ,char **p_word, size_t length, status *report) {
+Value validate_string(file_context *src, char **line ,char **p_word, size_t length, int *DC, status *report) {
     char *word = NULL;
     status temp_report;
     size_t word_len = length;
     word = *p_word;
 
     if (*word == '\"') {
-        if (concat_and_validate_string(line, p_word, &word_len, report) == INV) return INV;
+        if (concat_and_validate_string(src, line, p_word, &word_len, DC,report) == INV) return INV;
         word = *p_word;
         if (word[word_len - 1] != '\"')
             *report = ERR_MISSING_QMARK;
