@@ -1,10 +1,3 @@
-/* passes.c
- * Assembler first and second passes process.
- * Author: Bar Toplian
- * ID: 323869065
- * Email: bar.toplian@gmail.com
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
