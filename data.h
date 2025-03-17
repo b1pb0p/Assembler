@@ -1,10 +1,3 @@
-/* data.h
- * Header file for the data image and base conversions.
- * Author: Bar Toplian
- * ID: 323869065
- * Email: bar.toplian@gmail.com
- */
-
 #ifndef ASSEMBLER_DATA_H
 #define ASSEMBLER_DATA_H
 
