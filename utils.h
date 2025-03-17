@@ -1,10 +1,3 @@
-/* utils.h
- * Header file for utility and input managing methods.
- * Author: Bar Toplian
- * ID: 323869065
- * Email: bar.toplian@gmail.com
- */
-
 #ifndef ASSEMBLER_UTILS_H
 #define ASSEMBLER_UTILS_H
 
