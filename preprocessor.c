@@ -1,10 +1,3 @@
-/* preprocessor.c
- * Preprocessor and macro expansion.
- * Author: Bar Toplian
- * ID: 323869065
- * Email: bar.toplian@gmail.com
- */
-
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
