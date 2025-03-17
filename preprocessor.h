@@ -1,10 +1,3 @@
-/* preprocessor.c
- * Header file for the Preprocessor and macro expansion.
- * Author: Bar Toplian
- * ID: 323869065
- * Email: bar.toplian@gmail.com
- */
-
 #ifndef ASSEMBLER_PREPROCESSOR_H
 #define ASSEMBLER_PREPROCESSOR_H
 
