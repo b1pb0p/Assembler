@@ -1,10 +1,3 @@
-/* errors.c
- * Error Handling and status handling.
- * Author: Bar Toplian
- * ID: 323869065
- * Email: bar.toplian@gmail.com
- */
-
 #include <stdio.h>
 #include <stdarg.h>
 #include <ctype.h>
