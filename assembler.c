@@ -1,10 +1,3 @@
-/* Assembler Project in 20465 - System Programming Laboratory
- * 12 bits assembler.
- * Author: Bar Toplian
- * ID: 323869065
- * Email: bar.toplian@gmail.com
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include "errors.h"
